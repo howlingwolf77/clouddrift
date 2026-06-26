@@ -1,0 +1,30 @@
+# CloudDrift — Ruff Configuration
+# Replaces flake8 + black per advisor modernization guidance
+
+target-version = "py313"
+line-length = 88
+extend-exclude = ["notebooks/"]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import ordering)
+    "N",   # pep8-naming
+    "W",   # pycodestyle warnings
+    "UP",  # pyupgrade (modernize Python syntax)
+]
+ignore = [
+    "E501",  # line too long — handled by formatter
+    "N803",  # ML convention: uppercase X for feature matrices is standard
+    "N812",  # lightning imported as L — PyTorch Lightning's own convention
+]
+
+[lint.isort]
+known-first-party = ["src", "api", "dashboard"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

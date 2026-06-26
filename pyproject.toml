@@ -1,0 +1,81 @@
+[project]
+name = "clouddrift"
+version = "0.1.0"
+description = "Cloud infrastructure anomaly detector — Isolation Forest and TCN Autoencoder ensemble with full MLOps instrumentation"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+authors = [
+    { name = "howlingwolf77", email = "276320829+howlingwolf77@users.noreply.github.com" }
+]
+
+dependencies = [
+    # Data processing
+    "pandas>=2.1.0,<3.0.0",
+    "numpy>=2.4.0",
+    "pyarrow>=14.0.0",
+
+    # Machine Learning
+    "scikit-learn>=1.3.0",
+
+    # Deep Learning
+    "torch>=2.1.0",
+    "lightning>=2.1.0",
+
+    # Explainability
+
+    # Data Validation
+    "pandera>=0.17.0",
+
+    # Experiment Tracking
+    "mlflow>=2.9.0,<4.0.0",
+
+    # API
+    "fastapi>=0.136.0",
+    "uvicorn[standard]>=0.49.0",
+    "pydantic>=2.13.0",
+    "python-multipart>=0.0.6",
+    "httpx>=0.28.0",
+
+    # Monitoring — Prometheus
+    "prometheus-client>=0.19.0",
+
+    # Monitoring — OpenTelemetry
+    "opentelemetry-api>=1.21.0",
+    "opentelemetry-sdk>=1.21.0",
+    "opentelemetry-instrumentation-fastapi>=0.42b0",
+    "opentelemetry-exporter-otlp>=1.21.0",
+
+    # Drift Monitoring
+    "evidently>=0.4.0",
+
+    # Dashboard
+    "streamlit>=1.28.0",
+
+    # Visualization
+    "matplotlib>=3.10.0",
+    "seaborn>=0.13.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.6",
+    "ipykernel>=7.2.0",
+    "jupyter>=1.1.0",]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+# Configured in ruff.toml
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
