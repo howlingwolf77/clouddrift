@@ -1,0 +1,122 @@
+{
+  "dataset": "Alibaba",
+  "shape": {
+    "rows": 311929,
+    "columns": 7
+  },
+  "null_rate_check": {
+    "machine_id": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "cpu_util": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "mem_util": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "net_io_in": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "net_io_out": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "disk_io": {
+      "null_pct": 0.011,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "timestamp": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    }
+  },
+  "timestamp_continuity": {
+    "mode": "per_series",
+    "group_col": "machine_id",
+    "series_checked": 5,
+    "series_with_gaps": 5,
+    "total_large_gaps": 63,
+    "min_threshold_minutes": 5.0,
+    "pass": true,
+    "series_detail": {
+      "m_1932": {
+        "large_gap_count": 15,
+        "max_gap_minutes": 325.33,
+        "median_interval_minutes": 0.17,
+        "threshold_minutes": 5.0
+      },
+      "m_1933": {
+        "large_gap_count": 8,
+        "max_gap_minutes": 325.67,
+        "median_interval_minutes": 0.17,
+        "threshold_minutes": 5.0
+      },
+      "m_1934": {
+        "large_gap_count": 14,
+        "max_gap_minutes": 334.83,
+        "median_interval_minutes": 0.17,
+        "threshold_minutes": 5.0
+      },
+      "m_1935": {
+        "large_gap_count": 14,
+        "max_gap_minutes": 377.83,
+        "median_interval_minutes": 0.17,
+        "threshold_minutes": 5.0
+      },
+      "m_1936": {
+        "large_gap_count": 12,
+        "max_gap_minutes": 324.67,
+        "median_interval_minutes": 0.17,
+        "threshold_minutes": 5.0
+      }
+    }
+  },
+  "value_range_check": {
+    "cpu_util": {
+      "min": 3.0,
+      "max": 94.0,
+      "negative_count": 0,
+      "exceeds_100_count": 0,
+      "pass": true
+    },
+    "mem_util": {
+      "min": 52.0,
+      "max": 98.0,
+      "negative_count": 0,
+      "exceeds_100_count": 0,
+      "pass": true
+    },
+    "disk_io": {
+      "min": 1.0,
+      "max": 99.0,
+      "negative_count": 0,
+      "exceeds_100_count": 0,
+      "pass": true
+    },
+    "net_io_in": {
+      "min": 22.79,
+      "max": 55.73,
+      "negative_count": 0,
+      "pass": true
+    },
+    "net_io_out": {
+      "min": 18.12,
+      "max": 41.76,
+      "negative_count": 0,
+      "pass": true
+    }
+  },
+  "overall_pass": true,
+  "timestamp_continuity_informational": true
+}

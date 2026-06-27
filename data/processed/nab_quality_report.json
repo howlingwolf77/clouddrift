@@ -1,0 +1,203 @@
+{
+  "dataset": "NAB",
+  "shape": {
+    "rows": 137301,
+    "columns": 6
+  },
+  "null_rate_check": {
+    "timestamp": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "value": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "metric_name": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "category": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "source_file": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    },
+    "is_anomaly": {
+      "null_pct": 0.0,
+      "pass": true,
+      "threshold_pct": 5.0
+    }
+  },
+  "timestamp_continuity": {
+    "mode": "per_series",
+    "group_col": "source_file",
+    "series_checked": 24,
+    "series_with_gaps": 7,
+    "total_large_gaps": 62,
+    "min_threshold_minutes": 5.0,
+    "pass": true,
+    "series_detail": {
+      "realAWSCloudwatch/ec2_cpu_utilization_24ae8d.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_cpu_utilization_53ea38.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_cpu_utilization_5f5533.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_cpu_utilization_77c1ca.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_cpu_utilization_825cc2.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 10.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_cpu_utilization_ac20cd.csv": {
+        "large_gap_count": 2,
+        "max_gap_minutes": 20.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_cpu_utilization_c6585a.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_cpu_utilization_fe7f93.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_disk_write_bytes_1ef3de.csv": {
+        "large_gap_count": 1,
+        "max_gap_minutes": 61.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_disk_write_bytes_c0d644.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_network_in_257a54.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 10.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/ec2_network_in_5abac7.csv": {
+        "large_gap_count": 1,
+        "max_gap_minutes": 64.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/elb_request_count_8c0756.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 10.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/grok_asg_anomaly.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/iio_us-east-1_i-a2eb1cd9_NetworkIn.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/rds_cpu_utilization_cc0c53.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 10.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realAWSCloudwatch/rds_cpu_utilization_e47b3b.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realKnownCause/ambient_temperature_system_failure.csv": {
+        "large_gap_count": 9,
+        "max_gap_minutes": 10440.0,
+        "median_interval_minutes": 60.0,
+        "threshold_minutes": 120.0
+      },
+      "realKnownCause/cpu_utilization_asg_misconfiguration.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realKnownCause/ec2_request_latency_system_failure.csv": {
+        "large_gap_count": 1,
+        "max_gap_minutes": 64.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realKnownCause/machine_temperature_system_failure.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 5.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realKnownCause/nyc_taxi.csv": {
+        "large_gap_count": 0,
+        "max_gap_minutes": 30.0,
+        "median_interval_minutes": 30.0,
+        "threshold_minutes": 60.0
+      },
+      "realKnownCause/rogue_agent_key_hold.csv": {
+        "large_gap_count": 44,
+        "max_gap_minutes": 2735.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      },
+      "realKnownCause/rogue_agent_key_updown.csv": {
+        "large_gap_count": 4,
+        "max_gap_minutes": 50.0,
+        "median_interval_minutes": 5.0,
+        "threshold_minutes": 10.0
+      }
+    }
+  },
+  "value_range_check": {},
+  "anomaly_distribution": {
+    "anomaly_count": 12906,
+    "normal_count": 124395,
+    "anomaly_rate_pct": 9.4,
+    "class_imbalance_ratio": 9.6
+  },
+  "overall_pass": true,
+  "timestamp_continuity_informational": true
+}
