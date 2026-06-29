@@ -14,11 +14,5 @@
     "value_zscore_mid",
     "value_zscore_short"
   ],
-  "n_features": 13,
-  "rolling_windows": {
-    "short": 1,
-    "mid": 3,
-    "long": 6
-  },
-  "normalizer": "RobustPercentileNormalizer(lower_pct=1, upper_pct=99)"
+  "n_features": 13
 }

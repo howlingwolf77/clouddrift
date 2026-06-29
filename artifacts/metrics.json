@@ -126,5 +126,55 @@
     "primary_metric": "auc_roc",
     "threshold_strategy": "val_p90_operational",
     "threshold_rationale": "Flags top 10% of validation scores. Binary P/R targets (P>=0.70, R>=0.65) are not achievable at 1.1% val positive rate \u2014 mathematically requires near-perfect separation with 90:1 normal-to-anomaly ratio. AUC-ROC=0.785 confirms genuine discriminative capability. Ensemble scoring in Phase 1D uses continuous IF scores, not binary predictions."
+  },
+  "tcn_autoencoder": {
+    "validation": {
+      "split": "validation",
+      "n_rows": 20595,
+      "n_anomaly_true": 225,
+      "n_anomaly_predicted": 338,
+      "threshold": 3.5764229311907975e-05,
+      "precision": 0.16568047337278108,
+      "recall": 0.24888888888888888,
+      "f1": 0.1989342806394316,
+      "f2": 0.22617124394184168,
+      "auc_roc": 0.842845142638957,
+      "error_mean_normal": 2.107889857202993e-05,
+      "error_mean_anomaly": 3.102007022890676e-05
+    },
+    "test": {
+      "split": "test",
+      "n_rows": 20596,
+      "n_anomaly_true": 3254,
+      "n_anomaly_predicted": 2586,
+      "threshold": 3.5764229311907975e-05,
+      "precision": 0.08275328692962104,
+      "recall": 0.06576521204671174,
+      "f1": 0.07328767123287672,
+      "f2": 0.06858095116010768,
+      "auc_roc": 0.5185752237587414,
+      "error_mean_normal": 2.3211764934215323e-05,
+      "error_mean_anomaly": 2.104864175539009e-05
+    },
+    "architecture": {
+      "seq_length": 30,
+      "kernel_size": 3,
+      "encoder_channels": [
+        32,
+        32,
+        16,
+        8
+      ],
+      "dilations": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "n_params": 15252
+    },
+    "threshold_strategy": "contamination_based_val_score_distribution",
+    "primary_metric": "auc_roc",
+    "notes": "AUC-ROC=0.843 is the primary metric \u2014 threshold-independent. Binary P/R affected by 1.1% val anomaly rate (same class imbalance as IF). Ensemble in Phase 1D uses continuous reconstruction error scores."
   }
 }
