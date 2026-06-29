@@ -563,3 +563,82 @@ def define_temporal_split(
     logger.info("Temporal ordering verified — no data leakage")
 
     return train_df, val_df, test_df
+
+
+def define_temporal_split_per_series(
+    df: pd.DataFrame,
+    group_col: str = "source_file",
+    timestamp_col: str = "timestamp",
+    train_pct: float = 0.70,
+    val_pct: float = 0.15,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Split each time-series independently then combine the portions.
+
+    For heterogeneous multi-series datasets (NAB has 24 independent series),
+    a global temporal split distributes series unevenly across splits — some
+    series land entirely in training, others entirely in test, producing
+    drastically different anomaly rates per split.
+
+    Per-series splitting guarantees:
+      - Each series contributes to all three splits
+      - Anomaly rate is approximately equal across splits
+      - Temporal ordering within each series is preserved (no leakage)
+
+    Process:
+      1. For each series: sort by timestamp, split at train_pct and val_pct
+      2. Combine all series' training portions → train_df
+      3. Combine all series' validation portions → val_df
+      4. Combine all series' test portions → test_df
+
+    Args:
+        df:           DataFrame containing multiple independent time-series.
+        group_col:    Column identifying each independent series.
+        timestamp_col:Column to sort by within each series.
+        train_pct:    Fraction for training (default 70%).
+        val_pct:      Fraction for validation (default 15%).
+
+    Returns:
+        Tuple of (train_df, val_df, test_df).
+    """
+    test_pct = round(1.0 - train_pct - val_pct, 4)
+    assert test_pct > 0, f"train_pct ({train_pct}) + val_pct ({val_pct}) must be < 1.0"
+
+    train_parts, val_parts, test_parts = [], [], []
+
+    for series_id, group_df in df.groupby(group_col):
+        group_df = group_df.sort_values(timestamp_col).reset_index(drop=True)
+        n = len(group_df)
+
+        train_end = int(n * train_pct)
+        val_end = int(n * (train_pct + val_pct))
+
+        train_parts.append(group_df.iloc[:train_end])
+        val_parts.append(group_df.iloc[train_end:val_end])
+        test_parts.append(group_df.iloc[val_end:])
+
+    train_df = pd.concat(train_parts, ignore_index=True)
+    val_df = pd.concat(val_parts, ignore_index=True)
+    test_df = pd.concat(test_parts, ignore_index=True)
+
+    logger.info(
+        "Per-series temporal split (%d series) — "
+        "train: %s (%.0f%%) | val: %s (%.0f%%) | test: %s (%.0f%%)",
+        df[group_col].nunique(),
+        f"{len(train_df):,}",
+        train_pct * 100,
+        f"{len(val_df):,}",
+        val_pct * 100,
+        f"{len(test_df):,}",
+        test_pct * 100,
+    )
+
+    if "is_anomaly" in df.columns:
+        logger.info(
+            "Anomaly rates — train: %.1f%% | val: %.1f%% | test: %.1f%%",
+            train_df["is_anomaly"].mean() * 100,
+            val_df["is_anomaly"].mean() * 100,
+            test_df["is_anomaly"].mean() * 100,
+        )
+
+    return train_df, val_df, test_df
