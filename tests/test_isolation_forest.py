@@ -14,6 +14,7 @@ If any test below fails on import or signature mismatch, the live
 isolation_forest.py has likely drifted further from this reconstruction —
 paste the error and we will reconcile in one pass.
 """
+
 from pathlib import Path
 
 import joblib
@@ -300,7 +301,15 @@ class TestEvaluateModel:
     def test_returns_required_keys(self):
         model, threshold, df, fc = self._setup()
         metrics = evaluate_model(model, threshold, df[fc], df["is_anomaly"], "test")
-        for key in ["precision", "recall", "f1", "f2", "auc_roc", "n_rows", "threshold"]:
+        for key in [
+            "precision",
+            "recall",
+            "f1",
+            "f2",
+            "auc_roc",
+            "n_rows",
+            "threshold",
+        ]:
             assert key in metrics, f"Missing key: {key}"
 
     def test_metrics_between_0_and_1(self):
@@ -354,7 +363,9 @@ class TestEvaluateModel:
         metrics = evaluate_model(model, threshold, df[fc], df["is_anomaly"], "test")
         assert "meets_precision_target" in metrics
         assert "meets_recall_target" in metrics
-        assert metrics["meets_precision_target"] == (metrics["precision"] >= TARGET_PRECISION)
+        assert metrics["meets_precision_target"] == (
+            metrics["precision"] >= TARGET_PRECISION
+        )
         assert metrics["meets_recall_target"] == (metrics["recall"] >= TARGET_RECALL)
 
 
