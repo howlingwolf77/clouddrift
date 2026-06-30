@@ -69,6 +69,10 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:joblib",
+]
+
 
 [tool.ruff]
 # Configured in ruff.toml
