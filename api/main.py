@@ -21,9 +21,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from api.routers.detection import router as detection_router
 from api.routers.health import router as health_router
+from api.services.observability import setup_tracing
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,6 +50,10 @@ async def lifespan(app: FastAPI):
     from api.services.detection import load_all_artifacts
 
     app.state.artifacts = load_all_artifacts()
+
+    # Initialise OpenTelemetry tracing
+    setup_tracing(app)
+    logger.info("OpenTelemetry tracing initialised (ConsoleSpanExporter)")
 
     if app.state.artifacts["loaded"]:
         logger.info("All artifacts loaded — service is ready")
@@ -104,14 +110,18 @@ app.include_router(detection_router)
     include_in_schema=True,
     response_class=PlainTextResponse,
 )
-async def metrics() -> str:
+async def metrics() -> PlainTextResponse:
     """
     Prometheus metrics scrape endpoint.
-    Stub implementation — returns basic process info.
-    Full counters and histograms implemented on Day 9.
+
+    Returns all registered prometheus_client metrics in the standard
+    Prometheus text exposition format. Prometheus scrapes this endpoint
+    on a configurable interval (default 15s in the Day 12 Compose config).
+
+    Metrics exposed:
+        clouddrift_requests_total          Counter by endpoint + status_code
+        clouddrift_anomalies_total         Counter by severity_label
+        clouddrift_prediction_latency_seconds Histogram by endpoint
+        clouddrift_schema_violations_total Counter by endpoint
     """
-    return (
-        "# HELP clouddrift_api_up CloudDrift API is running\n"
-        "# TYPE clouddrift_api_up gauge\n"
-        "clouddrift_api_up 1\n"
-    )
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)

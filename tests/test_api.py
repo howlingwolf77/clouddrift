@@ -494,6 +494,156 @@ class TestMetricsEndpoint:
         response = self.client.get("/metrics")
         assert "text/plain" in response.headers["content-type"]
 
-    def test_metrics_contains_api_up_metric(self):
+    def test_metrics_contains_real_metric(self):
+        # clouddrift_api_up was the Day 8 stub — Day 9 replaced it with
+        # real generate_latest() output; check a stable real metric name
         response = self.client.get("/metrics")
-        assert "clouddrift_api_up" in response.text
+        assert "clouddrift_requests_total" in response.text
+
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics tests — added Day 9
+# ---------------------------------------------------------------------------
+
+
+class TestPrometheusMetrics:
+    """
+    Tests for the Prometheus /metrics endpoint content.
+
+    Strategy: make at least one /detect request in setup_method,
+    then verify /metrics returns valid text containing the expected
+    metric family names. Counter values are not asserted because
+    prometheus_client uses a global registry that accumulates across
+    test sessions — checking names is stable, checking values is not.
+    """
+
+    def setup_method(self):
+        from api.main import app
+
+        self._original_lifespan = app.router.lifespan_context
+        app.router.lifespan_context = _mock_lifespan
+        self._test_client = TestClient(app)
+        self.client = self._test_client.__enter__()
+        # Seed the counters with at least one request
+        self.client.post(
+            "/detect",
+            json={
+                "cpu_util": 41.0,
+                "mem_util": 72.0,
+                "net_io_in": 43.0,
+                "net_io_out": 33.0,
+                "timestamp": "2026-06-25T14:30:00Z",
+            },
+        )
+
+    def teardown_method(self):
+        from api.main import app
+
+        self._test_client.__exit__(None, None, None)
+        app.router.lifespan_context = self._original_lifespan
+
+    def test_metrics_returns_200(self):
+        response = self.client.get("/metrics")
+        assert response.status_code == 200
+
+    def test_metrics_content_type_is_prometheus(self):
+        response = self.client.get("/metrics")
+        assert "text/plain" in response.headers["content-type"]
+
+    def test_requests_total_counter_present(self):
+        response = self.client.get("/metrics")
+        assert "clouddrift_requests_total" in response.text
+
+    def test_prediction_latency_histogram_present(self):
+        response = self.client.get("/metrics")
+        assert "clouddrift_prediction_latency_seconds" in response.text
+
+    def test_anomalies_total_counter_present(self):
+        response = self.client.get("/metrics")
+        assert "clouddrift_anomalies_total" in response.text
+
+    def test_schema_violations_counter_present(self):
+        response = self.client.get("/metrics")
+        assert "clouddrift_schema_violations_total" in response.text
+
+    def test_histogram_has_bucket_lines(self):
+        response = self.client.get("/metrics")
+        assert "_bucket{" in response.text
+
+    def test_histogram_has_sum_and_count(self):
+        response = self.client.get("/metrics")
+        assert "clouddrift_prediction_latency_seconds_sum" in response.text
+        assert "clouddrift_prediction_latency_seconds_count" in response.text
+
+
+class TestPanderaValidation:
+    """
+    Tests for the Pandera schema validation layer in /detect.
+
+    Pydantic catches out-of-range values before Pandera runs —
+    these tests verify the _validate_snapshot() function directly
+    rather than hitting the HTTP layer, which avoids the Pydantic
+    interception and tests the Pandera logic independently.
+    """
+
+    def test_valid_snapshot_passes_pandera(self):
+        from api.routers.detection import _validate_snapshot
+        from api.schemas.telemetry import TelemetrySnapshot
+
+        snap = TelemetrySnapshot(
+            cpu_util=41.0,
+            mem_util=72.0,
+            net_io_in=43.0,
+            net_io_out=33.0,
+            timestamp="2026-06-25T14:30:00Z",
+        )
+        # Should not raise
+        _validate_snapshot(snap)
+
+    def test_null_disk_io_passes_pandera(self):
+        from api.routers.detection import _validate_snapshot
+        from api.schemas.telemetry import TelemetrySnapshot
+
+        snap = TelemetrySnapshot(
+            cpu_util=41.0,
+            mem_util=72.0,
+            net_io_in=43.0,
+            net_io_out=33.0,
+            disk_io=None,
+            timestamp="2026-06-25T14:30:00Z",
+        )
+        _validate_snapshot(snap)
+
+    def test_schema_returns_dict_with_required_keys(self):
+        """Verify _TELEMETRY_SCHEMA covers all required metric columns."""
+        from api.routers.detection import _TELEMETRY_SCHEMA
+
+        expected_cols = {"cpu_util", "mem_util", "net_io_in", "net_io_out", "disk_io"}
+        schema_cols = set(_TELEMETRY_SCHEMA.columns.keys())
+        assert expected_cols == schema_cols
+
+
+class TestMetricImports:
+    """Smoke tests: all four metric objects are importable and named correctly."""
+
+    def test_request_counter_importable(self):
+        from api.services.metrics import REQUEST_COUNTER
+
+        # prometheus_client strips _total suffix from ._name — it appears
+        # only in the /metrics text output, not in the internal attribute
+        assert REQUEST_COUNTER._name == "clouddrift_requests"
+
+    def test_anomaly_counter_importable(self):
+        from api.services.metrics import ANOMALY_COUNTER
+
+        assert ANOMALY_COUNTER._name == "clouddrift_anomalies"
+
+    def test_latency_histogram_importable(self):
+        from api.services.metrics import LATENCY_HISTOGRAM
+
+        assert LATENCY_HISTOGRAM._name == "clouddrift_prediction_latency_seconds"
+
+    def test_schema_violation_counter_importable(self):
+        from api.services.metrics import SCHEMA_VIOLATION_COUNTER
+
+        assert SCHEMA_VIOLATION_COUNTER._name == "clouddrift_schema_violations"
