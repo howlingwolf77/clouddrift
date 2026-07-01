@@ -66,6 +66,7 @@ filterwarnings = [
     "ignore:The set_bad function will be deprecated:PendingDeprecationWarning:shap",
     "ignore:The set_over function will be deprecated:PendingDeprecationWarning:shap",
     "ignore:The set_under function will be deprecated:PendingDeprecationWarning:shap",
+    "ignore:Using.*httpx.*starlette.testclient:DeprecationWarning",
 ]
 
 
