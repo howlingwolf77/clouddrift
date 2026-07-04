@@ -56,6 +56,14 @@ docker compose up --build
 
 ---
 
+### Live deployment (EC2)
+
+| Service | URL |
+|---------|-----|
+| API (Swagger UI) | http://54.165.137.224:8000/docs |
+| Streamlit dashboard | http://54.165.137.224:8501 |
+| Prometheus metrics | http://54.165.137.224:8000/metrics |
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
