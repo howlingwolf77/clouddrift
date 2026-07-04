@@ -34,14 +34,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
         with:
           version: "0.5.26"
           enable-cache: true
 
-      - name: Install Python 3.13
-        run: uv python install 3.13
+      - name: Verify Python and uv
+        run:
+          python --version
+          which python
+          uv --version
+          uv python list
 
       - name: Install dependencies
         # Dev dependencies must be included — ruff is a dev dependency
@@ -67,14 +76,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
         with:
           version: "0.5.26"
           enable-cache: true
 
-      - name: Install Python 3.13
-        run: uv python install 3.13
+      - name: Verify Python and uv
+        run:
+          python --version
+          which python
+          uv --version
+          uv python list
 
       - name: Install dependencies
         # --no-dev omits test/lint tools from the install but they are
