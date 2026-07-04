@@ -100,5 +100,8 @@ class TestCIWorkflow:
     def test_uses_python_313(self):
         jobs = self._load()["jobs"]
         lint_steps = jobs["lint"]["steps"]
+        # Python version may appear in 'run' commands (uv python install)
+        # or in 'with' blocks (actions/setup-python). Check both.
         step_cmds = " ".join(str(s.get("run", "")) for s in lint_steps)
-        assert "3.13" in step_cmds
+        step_withs = " ".join(str(s.get("with", "")) for s in lint_steps)
+        assert "3.13" in step_cmds or "3.13" in step_withs
