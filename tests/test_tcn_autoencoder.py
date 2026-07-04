@@ -290,6 +290,10 @@ class TestArtifactIO:
         save_tcn_autoencoder(model, path=nested)
         assert nested.exists()
 
+    @pytest.mark.skipif(
+        not ARTIFACT_EXISTS or not FEATURES_EXIST,
+        reason="tcn_autoencoder.pt or feature matrices not present — skipped in CI",
+    )
     def test_reconstruction_error_separation(self):
         """Anomaly sequences should have higher error than normal sequences."""
         import json
@@ -356,7 +360,7 @@ class TestTCNIntegration:
         assert np.isfinite(errors.dropna()).all()
 
     @pytest.mark.skipif(
-        ARTIFACT_EXISTS or not FEATURES_EXIST,
+        not ARTIFACT_EXISTS or not FEATURES_EXIST,
         reason="TCN artifact or feature matrices not present — skipped in CI",
     )
     def test_reconstruction_error_separation(self):
