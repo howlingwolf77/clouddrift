@@ -9,9 +9,11 @@ import pytest
 
 NOTEBOOK_PATH = Path("notebooks/06_shap_analysis.ipynb")
 PLOTS_DIR = Path("artifacts/shap_plots")
+IF_ARTIFACT = Path("artifacts/isolation_forest.joblib")
 
 NOTEBOOK_EXISTS = NOTEBOOK_PATH.exists()
 PLOTS_EXIST = PLOTS_DIR.exists()
+IF_ARTIFACT_EXISTS = IF_ARTIFACT.exists()
 
 
 def test_shap_importable_in_main_env():
@@ -19,6 +21,10 @@ def test_shap_importable_in_main_env():
     import shap  # noqa: F401
 
 
+@pytest.mark.skipif(
+    not IF_ARTIFACT_EXISTS,
+    reason="isolation_forest.joblib not present — skipped in CI",
+)
 def test_shap_treeexplainer_works_on_real_if_model():
     import joblib
     import shap
