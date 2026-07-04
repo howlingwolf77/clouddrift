@@ -59,7 +59,7 @@ jobs:
 
       - name: Install dependencies
         # Dev dependencies must be included — ruff is a dev dependency
-        run: uv sync --frozen
+        run: uv sync --frozen --python 3.13
 
       - name: Ruff — lint check
         run: uv run ruff check .
@@ -102,7 +102,7 @@ jobs:
       - name: Install dependencies
         # --no-dev omits test/lint tools from the install but they are
         # included by default (dev group). Keep them for pytest.
-        run: uv sync --frozen
+        run: uv sync --frozen --python 3.13
 
       - name: Run pytest
         run: uv run pytest tests/ -q --tb=short
