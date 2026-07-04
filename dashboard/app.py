@@ -16,6 +16,7 @@ Prerequisites:
     uv run uvicorn api.main:app --port 8000)
 """
 
+import os
 import sys
 import time
 from datetime import UTC, datetime
@@ -57,10 +58,13 @@ st.sidebar.title("CloudDrift")
 st.sidebar.caption("Cloud Infrastructure Anomaly Detector")
 st.sidebar.markdown("---")
 
+# CLOUDDRIFT_API_URL env var is set in compose.yml for Docker deployments.
+# Falls back to localhost for local development.
+_DEFAULT_API_URL = os.environ.get("CLOUDDRIFT_API_URL", "http://localhost:8000")
 API_URL = st.sidebar.text_input(
     "API URL",
-    value="http://localhost:8000",
-    help="CloudDrift FastAPI service URL",
+    value=_DEFAULT_API_URL,
+    help="CloudDrift FastAPI service URL. Set CLOUDDRIFT_API_URL env var to override.",
 )
 
 st.sidebar.markdown("### Simulation Mode")

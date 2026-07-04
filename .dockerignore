@@ -1,0 +1,37 @@
+# Version control
+.git
+.gitignore
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+
+# Virtual environments
+.venv
+.venv-shap
+
+# Large data files — not needed in image
+data/raw/
+data/processed/
+
+# Model artifacts — volume-mounted at runtime, not baked into image
+# (hundreds of MB; baking them in would make every code change slow)
+artifacts/*.joblib
+artifacts/*.pt
+artifacts/checkpoints/
+artifacts/shap_plots/
+
+# Development artefacts
+mlflow.db
+mlruns/
+logs/drift/
+
+# Notebooks — not needed in container
+notebooks/
+
+# Documentation — not needed in container
+docs/

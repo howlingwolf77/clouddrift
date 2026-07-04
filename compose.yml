@@ -1,0 +1,115 @@
+# CloudDrift — Docker Compose v2
+#
+# Usage:
+#   docker compose up --build       # build and start both services
+#   docker compose up --build -d    # same, detached
+#   docker compose logs -f api      # tail API logs
+#   docker compose logs -f dashboard
+#   docker compose down             # stop and remove containers
+#   docker compose down -v          # also remove volumes
+#
+# Prometheus monitoring (optional, requires monitoring/prometheus.yml):
+#   docker compose --profile monitoring up --build
+#
+# Services:
+#   api       — FastAPI anomaly detection service on port 8000
+#   dashboard — Streamlit ops dashboard on port 8501
+#   prometheus— (optional, monitoring profile) Prometheus scraper on 9090
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # FastAPI anomaly detection service
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: clouddrift:latest
+    container_name: clouddrift-api
+    command: >
+      uv run uvicorn api.main:app
+        --host 0.0.0.0
+        --port 8000
+        --workers 1
+    ports:
+      - "8000:8000"
+    volumes:
+      # Model artifacts — volume-mounted so they don't bloat the image.
+      # The host path must contain all seven required artifact files.
+      - ./artifacts:/app/artifacts:ro
+      # Reference data for /detect z-score attribution
+      - ./data/processed:/app/data/processed:ro
+      # Drift reports written by the dashboard at runtime
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      # Poll /health (liveness) not /ready (readiness) so Docker doesn't
+      # restart the container while artifacts are loading at startup.
+      # The /ready endpoint is tested separately after the container is up.
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - clouddrift-net
+
+  # ---------------------------------------------------------------------------
+  # Streamlit ops dashboard
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: clouddrift:latest
+    container_name: clouddrift-dashboard
+    command: >
+      uv run streamlit run dashboard/app.py
+        --server.port 8501
+        --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      # Inside Docker, the API is reachable via the service name 'api'.
+      # This is injected into dashboard/app.py which reads it with os.environ.get().
+      - CLOUDDRIFT_API_URL=http://api:8000
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+      - ./data/processed:/app/data/processed:ro
+      - ./logs:/app/logs
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - clouddrift-net
+
+  # ---------------------------------------------------------------------------
+  # Prometheus scraper (optional — start with: docker compose --profile monitoring up)
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: clouddrift-prometheus
+    profiles: ["monitoring"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - clouddrift-net
+
+# ---------------------------------------------------------------------------
+# Shared network
+# ---------------------------------------------------------------------------
+networks:
+  clouddrift-net:
+    driver: bridge
+    name: clouddrift-net

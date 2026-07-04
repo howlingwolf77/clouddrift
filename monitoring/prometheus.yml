@@ -1,0 +1,19 @@
+# Prometheus configuration for CloudDrift
+#
+# Scrapes the /metrics endpoint of the CloudDrift API every 15 seconds.
+# 'api' resolves to the api container via the clouddrift-net Docker network.
+#
+# Start with monitoring profile:
+#   docker compose --profile monitoring up --build
+#
+# View collected metrics at: http://localhost:9090
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "clouddrift-api"
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: "/metrics"
