@@ -71,6 +71,7 @@ filterwarnings = [
     "ignore:numpy.core is deprecated",
     "ignore:Call to deprecated function.*Dependency",
     "ignore:Use of deprecated class.*DependencyKwarg",
+    "ignore:invalid escape sequence:SyntaxWarning:evidently",
 ]
 
 
