@@ -19,10 +19,10 @@ on:
 env:
   # Silence the Streamlit first-run email prompt during any import
   DISABLE_STREAMLIT_ONBOARDING: "true"
-  # Tell uv to use the system Python (set up by actions/setup-python)
-  # rather than searching its own managed interpreter registry.
-  # Without this, uv sync --frozen fails because it looks for the
-  # exact patch version in uv.lock (3.13.12) but the runner has 3.13.14.
+  # Tell ALL uv commands (uv sync, uv run, etc.) to accept any 3.13.x
+  # Python from the system PATH. Without this, uv reads .python-version
+  # (which pins to 3.13.12) and rejects the runner's Python 3.13.14.
+  UV_PYTHON: "3.13"
   UV_SYSTEM_PYTHON: "1"
 
 jobs:
