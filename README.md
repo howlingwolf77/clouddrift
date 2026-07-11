@@ -133,7 +133,7 @@ docker compose --profile monitoring up --build
 **Example: detect an anomaly**
 
 ```bash
-curl -X POST http://localhost:8000/detect \
+curl -s -X POST http://localhost:8000/detect \
   -H "Content-Type: application/json" \
   -d '{
     "cpu_util": 99.0,
@@ -141,18 +141,28 @@ curl -X POST http://localhost:8000/detect \
     "net_io_in": 95.0,
     "net_io_out": 90.0,
     "timestamp": "2026-07-04T14:30:00Z"
-  }'
+  }' | python3 -m json.tool
 ```
 
 Response:
 ```json
 {
-  "anomaly_score": 0.9312,
-  "severity_label": "Critical",
-  "top_contributing_features": ["cpu_util", "mem_util", "net_io_in"],
-  "feature_deviation_scores": {"cpu_util": 2.95, "mem_util": 1.90, "net_io_in": 3.47},
-  "inference_latency_ms": 4.7,
-  "detection_mode": "single_point_zscore"
+    "anomaly_score": 0.8263,
+    "severity_label": "Critical",
+    "top_contributing_features": [
+        "net_io_in",
+        "cpu_util",
+        "net_io_out",
+        "mem_util"
+    ],
+    "feature_deviation_scores": {
+        "net_io_in": 3.8425,
+        "cpu_util": 3.4005,
+        "net_io_out": 3.3452,
+        "mem_util": 0.9904
+    },
+    "inference_latency_ms": 23.89,
+    "detection_mode": "single_point_zscore"
 }
 ```
 

@@ -137,7 +137,7 @@ metrics.json                 ~1 KB     Consolidated evaluation metrics (all thre
 
 The `/ready` endpoint confirms all artifacts are loaded:
 ```bash
-curl http://localhost:8000/ready | python3 -m json.tool
+curl -s http://localhost:8000/ready | python3 -m json.tool
 ```
 
 ---

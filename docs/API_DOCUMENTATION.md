@@ -28,7 +28,7 @@ If the process is running, you get 200. If the process is dead, you
 get a connection error.
 
 ```bash
-curl http://localhost:8000/health
+curl -s http://localhost:8000/health | python3 -m json.tool
 ```
 
 **Response (200):**
@@ -48,7 +48,7 @@ Use this endpoint to gate traffic: do not route requests to `/detect`
 until `/ready` returns 200.
 
 ```bash
-curl http://localhost:8000/ready
+curl -s http://localhost:8000/ready | python3 -m json.tool
 ```
 
 **Response (200 — all artifacts loaded):**
@@ -108,7 +108,7 @@ are scaled to [0, 100] to match — a reading of `cpu_util=45.0` is
 compared against a reference mean of ~30.0 (30% CPU from SMD training).
 
 ```bash
-curl -X POST http://localhost:8000/detect \
+curl -s -X POST http://localhost:8000/detect \
   -H "Content-Type: application/json" \
   -d '{
     "cpu_util": 85.3,
@@ -118,10 +118,32 @@ curl -X POST http://localhost:8000/detect \
     "disk_io": 5.0,
     "timestamp": "2026-07-04T14:30:00Z",
     "machine_id": "m_1932"
-  }'
+  }' | python3 -m json.tool
 ```
 
 **Response (200):**
+```json
+{
+    "anomaly_score": 0.5,
+    "severity_label": "Warning",
+    "top_contributing_features": [
+        "cpu_util",
+        "net_io_in",
+        "net_io_out",
+        "disk_io",
+        "mem_util"
+    ],
+    "feature_deviation_scores": {
+        "cpu_util": 2.7833,
+        "net_io_in": 1.3728,
+        "net_io_out": 0.7879,
+        "disk_io": 0.4943,
+        "mem_util": 0.0674
+    },
+    "inference_latency_ms": 4.12,
+    "detection_mode": "single_point_zscore"
+}
+```
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -145,7 +167,7 @@ curl -X POST http://localhost:8000/detect \
 ranked by anomaly score descending.
 
 ```bash
-curl -X POST http://localhost:8000/batch_detect \
+curl -s -X POST http://localhost:8000/batch_detect \
   -H "Content-Type: application/json" \
   -d '{
     "snapshots": [
@@ -160,34 +182,55 @@ curl -X POST http://localhost:8000/batch_detect \
         "timestamp": "2026-07-04T14:31:00Z"
       }
     ]
-  }'
+  }' | python3 -m json.tool
 ```
 
 **Response (200):**
 ```json
 {
-  "n_snapshots": 2,
-  "n_flagged": 1,
-  "threshold": 0.4829,
-  "results": [
-    {
-      "rank": 1,
-      "timestamp": "2026-07-04T14:31:00Z",
-      "machine_id": null,
-      "anomaly_score": 0.9312,
-      "severity_label": "Critical",
-      "top_contributing_features": ["cpu_util", "net_io_in", "mem_util"],
-      "feature_deviation_scores": {"cpu_util": 2.95, "net_io_in": 3.47, "mem_util": 1.90}
-    },
-    {
-      "rank": 2,
-      "timestamp": "2026-07-04T14:30:00Z",
-      "anomaly_score": 0.0312,
-      "severity_label": "Normal",
-      "top_contributing_features": ["cpu_util"],
-      "feature_deviation_scores": {"cpu_util": 0.05}
-    }
-  ]
+    "n_snapshots": 2,
+    "n_flagged": 1,
+    "threshold": 0.591347,
+    "results": [
+        {
+            "rank": 1,
+            "timestamp": "2026-07-04T14:31:00Z",
+            "machine_id": null,
+            "anomaly_score": 0.8263,
+            "severity_label": "Critical",
+            "top_contributing_features": [
+                "net_io_in",
+                "cpu_util",
+                "net_io_out",
+                "mem_util"
+            ],
+            "feature_deviation_scores": {
+                "net_io_in": 3.8425,
+                "cpu_util": 3.4005,
+                "net_io_out": 3.3452,
+                "mem_util": 0.9904
+            }
+        },
+        {
+            "rank": 2,
+            "timestamp": "2026-07-04T14:30:00Z",
+            "machine_id": null,
+            "anomaly_score": 0.3158,
+            "severity_label": "Normal",
+            "top_contributing_features": [
+                "net_io_in",
+                "cpu_util",
+                "net_io_out",
+                "mem_util"
+            ],
+            "feature_deviation_scores": {
+                "net_io_in": 1.3709,
+                "cpu_util": 0.7876,
+                "net_io_out": 0.7843,
+                "mem_util": 0.5616
+            }
+        }
+    ]
 }
 ```
 
@@ -201,7 +244,7 @@ Limits: 1–1000 snapshots per request.
 metrics in the standard Prometheus text exposition format.
 
 ```bash
-curl http://localhost:8000/metrics
+curl -s http://localhost:8000/metrics
 ```
 
 **Metrics exposed:**

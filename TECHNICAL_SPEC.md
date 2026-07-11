@@ -186,15 +186,24 @@ No fallback was needed.
 ### Output schema (/detect)
 ```json
 {
-  "anomaly_score": 0.87,
-  "severity_label": "Critical",
-  "top_contributing_features": ["cpu_util", "mem_util"],
-  "feature_deviation_scores": {
-    "cpu_util": 3.42,
-    "mem_util": 2.81
-  },
-  "inference_latency_ms": 4.7,
-  "detection_mode": "single_point_zscore"
+    "anomaly_score": 0.5,
+    "severity_label": "Warning",
+    "top_contributing_features": [
+        "cpu_util",
+        "net_io_in",
+        "net_io_out",
+        "disk_io",
+        "mem_util"
+    ],
+    "feature_deviation_scores": {
+        "cpu_util": 2.7833,
+        "net_io_in": 1.3728,
+        "net_io_out": 0.7879,
+        "disk_io": 0.4943,
+        "mem_util": 0.0674
+    },
+    "inference_latency_ms": 6.01,
+    "detection_mode": "single_point_zscore"
 }
 ```
 

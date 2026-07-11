@@ -66,7 +66,7 @@ The training pipeline lives in standalone scripts at the project root:
 
 ```bash
 python day4_if_training_smd.py    # Isolation Forest
-python day5_tcn_training_smd.py   # TCN Autoencoder (~2.5h on CPU)
+python day5_tcn_training_smd.py   # TCN Autoencoder (~1.5h on CPU)
 python day6_ensemble_smd.py       # Ensemble scoring
 python generate_api_artifacts.py  # API artifacts and reference stats
 ```
