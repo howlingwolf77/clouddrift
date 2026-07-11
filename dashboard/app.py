@@ -337,7 +337,7 @@ if "anomaly_score" in history_df.columns:
     chart_df.index = range(len(chart_df))
 
     # Add threshold lines using st.line_chart
-    chart_df["Critical threshold"] = 0.8
+    chart_df["Critical threshold"] = 0.75
     chart_df["Warning threshold"] = 0.5
 
     st.line_chart(

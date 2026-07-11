@@ -153,7 +153,7 @@ No fallback was needed.
 
 - IF weight: 0.40 | TCN weight: 0.60 (original design specification)
 - Both scores normalized to [0, 1] before combination using training normal bounds
-- Severity labels: Critical (>0.8), Warning (0.5–0.8), Normal (<0.5)
+- Severity labels: Critical (>0.75), Warning (0.5–0.75), Normal (<0.5)
 - Test AUC-ROC: 0.899 | Test Recall: 0.762 ✓
 
 ---

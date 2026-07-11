@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 ARTIFACTS_DIR = Path("artifacts")
 
 # Severity thresholds — consistent with src/models/ensemble.py constants
-SEVERITY_CRITICAL = 0.8
+SEVERITY_CRITICAL = 0.75
 SEVERITY_WARNING = 0.5
 
 

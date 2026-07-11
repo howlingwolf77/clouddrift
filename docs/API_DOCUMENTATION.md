@@ -126,7 +126,7 @@ curl -X POST http://localhost:8000/detect \
 | Field | Type | Description |
 |-------|------|-------------|
 | anomaly_score | float [0,1] | Composite anomaly score |
-| severity_label | str | "Critical" (≥0.8), "Warning" (≥0.5), "Normal" (<0.5) |
+| severity_label | str | "Critical" (≥0.75), "Warning" (≥0.5), "Normal" (<0.5) |
 | top_contributing_features | list[str] | Metrics ranked by z-score deviation |
 | feature_deviation_scores | dict[str,float] | Z-score deviation per metric |
 | inference_latency_ms | float | End-to-end latency in ms |

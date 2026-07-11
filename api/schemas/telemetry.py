@@ -102,8 +102,8 @@ class AnomalyResponse(BaseModel):
 
     anomaly_score is in [0, 1]:
         < 0.50  → Normal
-        0.50-0.80 → Warning
-        >= 0.80 → Critical
+        0.50-0.75 → Warning
+        >= 0.75 → Critical
 
     top_contributing_features lists the metric names that deviated most
     from their training normal distribution (z-score attribution,
