@@ -249,3 +249,4 @@ mlruns/
 # Evidently drift reports (generated at runtime)
 logs/drift/*.html
 logs/drift/*.json
+artifacts/checkpoints/
