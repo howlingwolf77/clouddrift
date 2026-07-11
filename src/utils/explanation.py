@@ -15,10 +15,10 @@ Two-track explainability strategy (from CloudDrift technical spec):
 
 Usage in the API (/detect endpoint, Day 8):
     reference_stats = load_reference_stats()
-    snapshot = {"cpu_util_zscore_mid": 0.92, "value_roc": 0.81, ...}
+    snapshot = {"cpu_util_zscore_mid": 0.92, "cpu_mem_corr_long": 0.81, ...}
     attribution = compute_feature_deviation_scores(snapshot, feature_cols,
                                                    reference_stats, n_top=3)
-    # → [{"feature": "value_zscore_long", "deviation_score": 3.42, ...}, ...]
+    # → [{"feature": "cpu_util_zscore_long", "deviation_score": 3.42, ...}, ...]
 """
 
 import json

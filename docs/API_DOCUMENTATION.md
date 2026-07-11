@@ -85,7 +85,7 @@ curl http://localhost:8000/ready
 ### POST /detect
 
 **Purpose:** Score a single telemetry snapshot. Uses z-score
-attribution against the Alibaba training distribution (single-point
+attribution against the SMD training distribution (single-point
 mode). For full IF+TCN ensemble scoring, use `/batch_detect` with
 ≥30 sequential snapshots.
 
@@ -95,11 +95,17 @@ mode). For full IF+TCN ensemble scoring, use `/batch_detect` with
 |-------|------|----------|-------|-------------|
 | cpu_util | float | ✓ | [0, 100] | CPU utilization % |
 | mem_util | float | ✓ | [0, 100] | Memory utilization % |
-| net_io_in | float | ✓ | [0, 100] | Inbound network traffic (normalized) |
-| net_io_out | float | ✓ | [0, 100] | Outbound network traffic (normalized) |
+| net_io_in | float | ✓ | [0, 100] | Inbound network traffic (normalized to %) |
+| net_io_out | float | ✓ | [0, 100] | Outbound network traffic (normalized to %) |
 | disk_io | float | ✗ | [0, 100] | Disk I/O utilization % (null accepted) |
 | timestamp | str | ✓ | ISO-8601 | Reading timestamp |
 | machine_id | str | ✗ | — | Optional machine identifier |
+
+**Note on input scale:** The API accepts values in [0, 100] (percentage
+scale) for operator ergonomics. SMD training data is pre-normalized to
+[0, 1]. The z-score reference statistics in `artifacts/api_reference_stats.json`
+are scaled to [0, 100] to match — a reading of `cpu_util=45.0` is
+compared against a reference mean of ~30.0 (30% CPU from SMD training).
 
 ```bash
 curl -X POST http://localhost:8000/detect \

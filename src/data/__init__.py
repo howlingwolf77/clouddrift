@@ -1,4 +1,4 @@
 """
 Data ingestion and validation module.
-Covers: NAB ingestion, Alibaba Cluster Trace ingestion, Pandera schema validation.
+Covers: SMD ingestion, Alibaba Cluster Trace ingestion, Pandera schema validation.
 """

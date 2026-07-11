@@ -236,7 +236,7 @@ class TCNAutoencoder(L.LightningModule):
 
     def __init__(
         self,
-        input_dim: int = 13,
+        input_dim: int = 68,
         seq_length: int = SEQ_LENGTH,
         kernel_size: int = KERNEL_SIZE,
         learning_rate: float = LEARNING_RATE,

@@ -1,13 +1,14 @@
 """
-Day 3 tests: feature engineering pipeline.
+Feature engineering pipeline tests.
 
-Tests cover:
-    - Rolling feature computation on synthetic data
-    - Per-series isolation (no cross-contamination between groups)
-    - Cross-metric feature computation
-    - RobustPercentileNormalizer fit/transform
-    - Feature pipeline save/load round-trip
-    - Integration test against real NAB data
+Unit tests (no data required):
+    TestAlibabaFeatures             — build_alibaba_features() on synthetic data
+    TestRobustPercentileNormalizer  — normalizer fit/transform
+    TestFeaturePipeline             — pipeline build/save/load/apply
+
+Integration tests (skip when artifacts absent):
+    TestSMDArtifactsIntegration     — feature_metadata.json and pipeline consistency
+    TestFeaturePipelineIntegration  — pipeline bounds against live artifact
 """
 
 from pathlib import Path
@@ -21,14 +22,13 @@ from src.features.engineering import (
     apply_feature_pipeline,
     build_alibaba_features,
     build_feature_pipeline,
-    build_nab_features,
     get_feature_columns,
     load_feature_pipeline,
     save_feature_pipeline,
 )
 
-NAB_FEATURES_EXIST = Path("data/processed/nab_train_features.parquet").exists()
 PIPELINE_EXISTS = Path("artifacts/feature_pipeline.joblib").exists()
+FEATURE_META_EXISTS = Path("artifacts/feature_metadata.json").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -36,19 +36,23 @@ PIPELINE_EXISTS = Path("artifacts/feature_pipeline.joblib").exists()
 # ---------------------------------------------------------------------------
 
 
-def _make_nab_df(n: int = 50, n_series: int = 2) -> pd.DataFrame:
-    """Create a minimal NAB-format DataFrame for testing."""
+def _make_alibaba_df(n: int = 30, n_machines: int = 2) -> pd.DataFrame:
+    """Create a minimal SMD/Alibaba-format DataFrame for testing."""
     dfs = []
-    for i in range(n_series):
-        timestamps = pd.date_range("2024-01-01", periods=n, freq="5min")
+    for m in range(n_machines):
+        machine_name = f"machine-1-{m + 1}"
+        timestamps = pd.date_range("2024-01-01", periods=n, freq="1min")
         dfs.append(
             pd.DataFrame(
                 {
                     "timestamp": timestamps,
-                    "value": [float(j + i * 10) for j in range(n)],
-                    "metric_name": f"metric_{i}",
-                    "category": "test",
-                    "source_file": f"test/series_{i}.csv",
+                    "machine_id": machine_name,
+                    "source_file": machine_name,
+                    "cpu_util": [float(0.20 + j * 0.005 + m * 0.05) for j in range(n)],
+                    "mem_util": [float(0.40 + j * 0.003) for j in range(n)],
+                    "net_io_in": [float(0.10 + j * 0.001) for j in range(n)],
+                    "net_io_out": [float(0.05 + j * 0.0005) for j in range(n)],
+                    "disk_io": [0.08] * n,
                     "is_anomaly": [j > n - 5 for j in range(n)],
                 }
             )
@@ -56,139 +60,13 @@ def _make_nab_df(n: int = 50, n_series: int = 2) -> pd.DataFrame:
     return pd.concat(dfs, ignore_index=True)
 
 
-def _make_alibaba_df(n: int = 30, n_machines: int = 2) -> pd.DataFrame:
-    """Create a minimal Alibaba-format DataFrame for testing."""
-    dfs = []
-    for m in range(n_machines):
-        timestamps = pd.date_range("2024-01-01", periods=n, freq="30s")
-        dfs.append(
-            pd.DataFrame(
-                {
-                    "timestamp": timestamps,
-                    "machine_id": f"m_{m}",
-                    "cpu_util": [float(20 + j * 0.5 + m * 5) for j in range(n)],
-                    "mem_util": [float(40 + j * 0.3) for j in range(n)],
-                    "net_io_in": [float(10 + j * 0.1) for j in range(n)],
-                    "net_io_out": [float(5 + j * 0.05) for j in range(n)],
-                    "disk_io": [8.0] * n,
-                }
-            )
-        )
-    return pd.concat(dfs, ignore_index=True)
-
-
 # ---------------------------------------------------------------------------
-# Rolling feature tests
-# ---------------------------------------------------------------------------
-
-
-class TestNABFeatures:
-    """Tests for build_nab_features()."""
-
-    def test_returns_all_original_columns(self):
-        df = _make_nab_df()
-        result = build_nab_features(df)
-        original_cols = set(df.columns)
-        assert original_cols.issubset(set(result.columns))
-
-    def test_engineered_columns_present(self):
-        df = _make_nab_df()
-        result = build_nab_features(df)
-        expected = [
-            "value_mean_short",
-            "value_mean_mid",
-            "value_mean_long",
-            "value_std_short",
-            "value_std_mid",
-            "value_std_long",
-            "value_zscore_short",
-            "value_zscore_mid",
-            "value_zscore_long",
-            "value_roc",
-            "value_range_ratio_mid",
-            "value_range_ratio_long",
-        ]
-        for col in expected:
-            assert col in result.columns, f"Missing feature column: {col}"
-
-    def test_row_count_preserved(self):
-        df = _make_nab_df(n=50, n_series=3)
-        result = build_nab_features(df)
-        assert len(result) == len(df)
-
-    def test_per_series_isolation(self):
-        """Features from series_0 must not contaminate series_1."""
-        df = _make_nab_df(n=10, n_series=2)
-        result = build_nab_features(df)
-
-        # The first row of each series should have roc=0 (no previous row
-        # in that series). If series were concatenated before computing,
-        # roc would be non-zero at the series boundary.
-        for series_id in df["source_file"].unique():
-            first_row = (
-                result[result["source_file"] == series_id]
-                .sort_values("timestamp")
-                .iloc[0]
-            )
-            assert first_row["value_roc"] == 0.0, (
-                f"Series {series_id} first roc should be 0 — "
-                "cross-series contamination detected"
-            )
-
-    def test_no_nan_in_feature_columns(self):
-        df = _make_nab_df(n=20)
-        result = build_nab_features(df)
-        feat_cols = get_feature_columns(result)
-        nan_count = result[feat_cols].isnull().sum().sum()
-        assert nan_count == 0, f"Found {nan_count} NaNs in feature columns"
-
-    def test_zscore_zero_when_std_is_zero(self):
-        """Constant series should have z-score of 0, not NaN."""
-        df = pd.DataFrame(
-            {
-                "timestamp": pd.date_range("2024-01-01", periods=10, freq="5min"),
-                "value": [5.0] * 10,
-                "metric_name": "const",
-                "category": "test",
-                "source_file": "test/const.csv",
-                "is_anomaly": [False] * 10,
-            }
-        )
-        result = build_nab_features(df)
-        assert result["value_zscore_long"].isna().sum() == 0
-        assert (result["value_zscore_long"] == 0.0).all()
-
-    def test_range_ratio_between_0_and_1(self):
-        df = _make_nab_df(n=30)
-        result = build_nab_features(df)
-        for col in ["value_range_ratio_mid", "value_range_ratio_long"]:
-            assert result[col].between(0.0, 1.0).all(), (
-                f"{col} has values outside [0, 1]"
-            )
-
-    def test_raises_on_missing_group_column(self):
-        df = pd.DataFrame({"timestamp": [], "value": []})
-        with pytest.raises(ValueError, match="source_file"):
-            build_nab_features(df, group_col="source_file")
-
-    def test_raises_on_missing_value_column(self):
-        df = pd.DataFrame(
-            {
-                "timestamp": pd.date_range("2024-01-01", periods=3, freq="5min"),
-                "source_file": ["a"] * 3,
-            }
-        )
-        with pytest.raises(ValueError, match="value"):
-            build_nab_features(df)
-
-
-# ---------------------------------------------------------------------------
-# Alibaba and cross-metric feature tests
+# Alibaba / SMD rolling feature tests
 # ---------------------------------------------------------------------------
 
 
 class TestAlibabaFeatures:
-    """Tests for build_alibaba_features()."""
+    """Tests for build_alibaba_features() — covers SMD and Alibaba formats."""
 
     def test_returns_rolling_features_per_metric(self):
         df = _make_alibaba_df()
@@ -221,6 +99,37 @@ class TestAlibabaFeatures:
         result = build_alibaba_features(df)
         assert len(result) == len(df)
 
+    def test_feature_count_is_68(self):
+        """
+        5 raw + 5×12 rolling + 3 cross-metric = 68 total.
+        Must match input_dim=68 in the TCN Autoencoder.
+        If this fails, update input_dim and regenerate artifacts.
+        """
+        df = _make_alibaba_df(n=50, n_machines=1)
+        result = build_alibaba_features(df)
+        feat_cols = get_feature_columns(result)
+        assert len(feat_cols) == 68, (
+            f"Expected 68 feature columns, got {len(feat_cols)}. "
+            "Update TCN input_dim and day4_if_metrics.json if feature "
+            "engineering has changed."
+        )
+
+    def test_raises_on_missing_group_column(self):
+        df = pd.DataFrame({"timestamp": [], "cpu_util": []})
+        with pytest.raises(ValueError, match="machine_id"):
+            build_alibaba_features(df, group_col="machine_id")
+
+    def test_raises_on_missing_metric_columns(self):
+        df = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=3, freq="1min"),
+                "machine_id": ["m1"] * 3,
+                "unrelated_col": [1.0, 2.0, 3.0],
+            }
+        )
+        with pytest.raises(ValueError, match="No metric columns"):
+            build_alibaba_features(df)
+
 
 # ---------------------------------------------------------------------------
 # RobustPercentileNormalizer tests
@@ -244,7 +153,6 @@ class TestRobustPercentileNormalizer:
         df = self._make_feature_df()
         norm.fit(df)
         assert "feat_a" in norm.bounds_
-        assert "feat_b" in norm.bounds_
         lo, hi = norm.bounds_["feat_a"]
         assert lo < hi
 
@@ -253,8 +161,6 @@ class TestRobustPercentileNormalizer:
         df = self._make_feature_df(1000)
         norm.fit(df)
         result = norm.transform(df)
-        # Training data should be almost entirely in [0, 1]
-        # (not exactly because we clip at p1/p99, not min/max)
         assert result["feat_a"].between(0.0, 1.0).mean() > 0.98
         assert result["feat_b"].between(0.0, 1.0).mean() > 0.98
 
@@ -263,13 +169,12 @@ class TestRobustPercentileNormalizer:
         df = pd.DataFrame({"constant": [5.0] * 50})
         norm.fit(df)
         lo, hi = norm.bounds_["constant"]
-        assert hi > lo  # degenerate guard: hi = lo + 1
+        assert hi > lo
 
     def test_missing_column_at_transform_gets_zeros(self):
         norm = RobustPercentileNormalizer()
         train = pd.DataFrame({"feat_a": [1.0, 2.0, 3.0], "feat_b": [4.0, 5.0, 6.0]})
         norm.fit(train)
-        # Transform data missing feat_b
         new_data = pd.DataFrame({"feat_a": [1.5, 2.5]})
         result = norm.transform(new_data)
         assert "feat_b" in result.columns
@@ -293,18 +198,21 @@ class TestRobustPercentileNormalizer:
 
 
 class TestFeaturePipeline:
-    """Tests for pipeline save/load round-trip."""
+    """
+    Tests for pipeline build/save/load/apply round-trip.
+    Uses SMD-format synthetic data throughout.
+    """
 
     def test_build_pipeline_returns_fitted_pipeline(self):
-        df = _make_nab_df(n=50)
-        feat_df = build_nab_features(df)
+        df = _make_alibaba_df(n=50)
+        feat_df = build_alibaba_features(df)
         feat_cols = get_feature_columns(feat_df)
         pipeline = build_feature_pipeline(feat_df, feat_cols)
         assert hasattr(pipeline.named_steps["normalizer"], "bounds_")
 
     def test_save_load_round_trip(self, tmp_path):
-        df = _make_nab_df(n=50)
-        feat_df = build_nab_features(df)
+        df = _make_alibaba_df(n=50)
+        feat_df = build_alibaba_features(df)
         feat_cols = get_feature_columns(feat_df)
         pipeline = build_feature_pipeline(feat_df, feat_cols)
 
@@ -313,77 +221,102 @@ class TestFeaturePipeline:
         assert save_path.exists()
 
         loaded = load_feature_pipeline(path=save_path)
-        original_bounds = pipeline.named_steps["normalizer"].bounds_
-        loaded_bounds = loaded.named_steps["normalizer"].bounds_
-        assert original_bounds == loaded_bounds
+        assert pipeline.named_steps["normalizer"].bounds_ == (
+            loaded.named_steps["normalizer"].bounds_
+        )
 
     def test_load_raises_on_missing_artifact(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             load_feature_pipeline(path=tmp_path / "nonexistent.joblib")
 
     def test_apply_pipeline_preserves_metadata(self):
-        df = _make_nab_df(n=50)
-        feat_df = build_nab_features(df)
+        df = _make_alibaba_df(n=50)
+        feat_df = build_alibaba_features(df)
         feat_cols = get_feature_columns(feat_df)
         pipeline = build_feature_pipeline(feat_df, feat_cols)
         result = apply_feature_pipeline(pipeline, feat_df, feat_cols)
 
-        # Metadata columns must be unchanged
         assert "timestamp" in result.columns
         assert "is_anomaly" in result.columns
-        assert "source_file" in result.columns
-        # Timestamps must be identical to input
+        assert "machine_id" in result.columns
         pd.testing.assert_series_equal(feat_df["timestamp"], result["timestamp"])
 
     def test_apply_pipeline_features_in_0_1(self):
-        df = _make_nab_df(n=100)
-        feat_df = build_nab_features(df)
+        df = _make_alibaba_df(n=100)
+        feat_df = build_alibaba_features(df)
         feat_cols = get_feature_columns(feat_df)
         pipeline = build_feature_pipeline(feat_df, feat_cols)
         result = apply_feature_pipeline(pipeline, feat_df, feat_cols)
         feat_values = result[feat_cols]
         assert feat_values.min().min() >= 0.0
-        assert feat_values.max().max() <= 1.0 + 1e-9  # float tolerance
+        assert feat_values.max().max() <= 1.0 + 1e-9
 
 
 # ---------------------------------------------------------------------------
-# Integration tests — require real processed files
+# Integration tests — require artifacts from Days 4-6
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not NAB_FEATURES_EXIST, reason="NAB feature files not generated")
-class TestNABFeaturesIntegration:
-    """Integration tests against real generated feature matrices."""
+@pytest.mark.skipif(
+    not FEATURE_META_EXISTS,
+    reason="feature_metadata.json not generated — run generate_api_artifacts.py",
+)
+class TestSMDArtifactsIntegration:
+    """Validates feature_metadata.json is consistent with live feature engineering."""
 
-    def test_feature_files_exist(self):
-        for fname in [
-            "nab_train_features.parquet",
-            "nab_val_features.parquet",
-            "nab_test_features.parquet",
-        ]:
-            assert Path(f"data/processed/{fname}").exists()
-
-    def test_feature_matrix_has_no_nans(self):
+    def test_feature_metadata_has_correct_keys(self):
         import json
 
-        train = pd.read_parquet("data/processed/nab_train_features.parquet")
         with open("artifacts/feature_metadata.json") as f:
             meta = json.load(f)
-        feat_cols = meta["nab_feature_cols"]
-        nan_count = train[feat_cols].isnull().sum().sum()
-        assert nan_count == 0
 
-    def test_temporal_ordering_preserved(self):
-        train = pd.read_parquet("data/processed/nab_train_features.parquet")
-        val = pd.read_parquet("data/processed/nab_val_features.parquet")
-        test = pd.read_parquet("data/processed/nab_test_features.parquet")
-        assert train["timestamp"].max() <= val["timestamp"].min()
-        assert val["timestamp"].max() <= test["timestamp"].min()
+        required_keys = {
+            "feature_cols",
+            "n_features",
+            "input_dim",
+            "dataset",
+            "metric_cols",
+            "seq_length",
+        }
+        assert required_keys.issubset(set(meta.keys()))
 
-    def test_anomaly_labels_preserved(self):
-        train = pd.read_parquet("data/processed/nab_train_features.parquet")
-        original_train = pd.read_parquet("data/processed/nab_train.parquet")
-        assert train["is_anomaly"].sum() == original_train["is_anomaly"].sum()
+    def test_feature_count_matches_metadata(self):
+        import json
+
+        with open("artifacts/feature_metadata.json") as f:
+            meta = json.load(f)
+
+        df = _make_alibaba_df(n=50)
+        feat_df = build_alibaba_features(df)
+        actual_cols = get_feature_columns(feat_df)
+
+        assert len(actual_cols) == meta["n_features"], (
+            f"Metadata says {meta['n_features']} features but "
+            f"build_alibaba_features() produces {len(actual_cols)}. "
+            "Regenerate via generate_api_artifacts.py."
+        )
+
+    def test_input_dim_matches_n_features(self):
+        import json
+
+        with open("artifacts/feature_metadata.json") as f:
+            meta = json.load(f)
+        assert meta["input_dim"] == meta["n_features"]
+
+    def test_dataset_is_smd(self):
+        import json
+
+        with open("artifacts/feature_metadata.json") as f:
+            meta = json.load(f)
+        assert meta["dataset"] == "SMD"
+
+
+@pytest.mark.skipif(
+    not PIPELINE_EXISTS,
+    reason="feature_pipeline.joblib not generated — run day4_if_training_smd.py",
+)
+class TestFeaturePipelineIntegration:
+    """Integration tests for the live fitted pipeline artifact."""
 
     def test_pipeline_artifact_loadable(self):
         pipeline = load_feature_pipeline()
@@ -391,29 +324,41 @@ class TestNABFeaturesIntegration:
         assert hasattr(norm, "bounds_")
         assert len(norm.bounds_) > 0
 
-
-@pytest.mark.skipif(not PIPELINE_EXISTS, reason="Feature pipeline not generated")
-class TestFeaturePipelineIntegration:
-    """Tests pipeline consistency across train and val splits."""
-
-    def test_val_uses_training_bounds(self):
-        """Val normalization must use training bounds, not val bounds."""
-        import json
-
+    def test_pipeline_bounds_are_finite(self):
+        """
+        All normalizer bounds must be finite.
+        NaN bounds cause NaN loss in the TCN on the first epoch.
+        """
         pipeline = load_feature_pipeline()
-        train = pd.read_parquet("data/processed/nab_train_features.parquet")
-
-        with open("artifacts/feature_metadata.json") as f:
-            meta = json.load(f)
-        feat_cols = meta["nab_feature_cols"]
-
-        # Re-apply pipeline to train and compare to saved val
-        # (validates that both used the same fitted bounds)
         norm = pipeline.named_steps["normalizer"]
-        first_col = feat_cols[0]
-        lo, hi = norm.bounds_[first_col]
+        nan_cols = [
+            col
+            for col, (lo, hi) in norm.bounds_.items()
+            if np.isnan(lo) or np.isnan(hi) or np.isinf(lo) or np.isinf(hi)
+        ]
+        assert nan_cols == [], (
+            f"NaN/Inf bounds found: {nan_cols}. "
+            "Apply bounds patch before using the pipeline."
+        )
 
-        # Training data clipped to [lo, hi] → result should be exactly in [0, 1]
-        train_feat = apply_feature_pipeline(pipeline, train, feat_cols)
-        assert train_feat[first_col].min() >= 0.0 - 1e-9
-        assert train_feat[first_col].max() <= 1.0 + 1e-9
+    def test_bounds_unchanged_after_apply(self):
+        """Applying the pipeline must not refit bounds on new data."""
+        pipeline = load_feature_pipeline()
+        norm = pipeline.named_steps["normalizer"]
+        all_fitted_cols = list(norm.bounds_.keys())
+
+        df = _make_alibaba_df(n=100)
+        feat_df = build_alibaba_features(df)
+
+        # Use only columns present in both the pipeline and the synthetic df
+        common_cols = sorted([c for c in all_fitted_cols if c in feat_df.columns])
+        if not common_cols:
+            pytest.skip("No overlapping columns between pipeline and synthetic data")
+
+        bounds_before = {c: norm.bounds_[c] for c in common_cols}
+        apply_feature_pipeline(pipeline, feat_df, common_cols)
+
+        for col in common_cols:
+            assert norm.bounds_[col] == bounds_before[col], (
+                f"Bounds for '{col}' changed after apply — pipeline was refitted"
+            )

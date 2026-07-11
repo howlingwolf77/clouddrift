@@ -6,15 +6,8 @@ errors into a single weighted ensemble score.
 
 Design:
     Each model provides an independent anomaly signal:
-    - Isolation Forest:   point-wise feature-space separation (AUC-ROC=0.785)
-    - TCN Autoencoder:    temporal sequence reconstruction error (AUC-ROC=0.843)
-
-    weights are empirically tuned via two validation AUC-ROC weight scans:
-        Coarse scan (step=0.1): best at IF=0.1 → AUC-ROC=0.843.
-        Fine scan (step=0.05):  best at IF=0.05 → AUC-ROC=0.863.
-        IF=0.05 exceeds both standalone models (IF=0.785, TCN=0.843),
-        confirming genuine complementary signal at this weight.
-        At IF>0.10 the IF's weaker discrimination dilutes the TCN.
+    - Isolation Forest:   point-wise feature-space separation (AUC-ROC=0.801)
+    - TCN Autoencoder:    temporal sequence reconstruction error (AUC-ROC=0.869)
 
 Normalization:
     Both raw scores are normalized to [0, 1] before combining using
@@ -44,10 +37,9 @@ logger = logging.getLogger(__name__)
 ARTIFACTS_DIR = Path("artifacts")
 
 # Ensemble hyperparameters
-IF_WEIGHT = 0.05  # empirically tuned via fine-grained weight scan (step 0.05)
-TCN_WEIGHT = 0.95  # IF=0.05 achieves ensemble AUC-ROC=0.863 — exceeds both
-# standalone models (IF=0.785, TCN=0.843), confirming
-# genuine complementary signal at this weight
+IF_WEIGHT = 0.40
+TCN_WEIGHT = 0.60
+
 
 # Severity thresholds
 SEVERITY_CRITICAL = 0.8

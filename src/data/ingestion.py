@@ -2,12 +2,12 @@
 Data ingestion pipeline for CloudDrift.
 
 Loads and unifies:
-  - Numenta Anomaly Benchmark (NAB): real AWS CloudWatch time-series
-    with verified anomaly window labels
+  - Server Machine Dataset (SMD): 28 server machines with labeled anomalies,
+    38-dimensional telemetry (CPU, memory, network, disk I/O), ~4% anomaly rate.
+    Primary training dataset for the CloudDrift anomaly detection pipeline.
   - Alibaba Cluster Trace 2018: real production cluster telemetry
-    (machine_usage.csv, 8.4 GB, no header row)
-
-Both datasets contain real production data, not simulated data.
+    (machine_usage.csv, 8.4 GB, no header row). Supplementary dataset
+    for validation and exploration.
 
 Alibaba Cluster Trace schema (no header — columns named on read):
     machine_id       string   uid of machine
@@ -20,11 +20,16 @@ Alibaba Cluster Trace schema (no header — columns named on read):
     net_out          double   normalized outbound network traffic [0, 100]
     disk_io_percent  double   [0, 100]; sentinel values -1 and 101 are invalid
 
-Reference: Guo et al., "Limitations and Improvements of Machine Learning Workload
-Scheduling in Cloud Computing", 2019.
+SMD schema (38 unnamed columns, values pre-normalized to [0, 1]):
+    CloudDrift selects 5 columns by index and renames to standard names.
+    See SMD_COL_MAP for the index-to-name mapping.
+
+Reference: Guo et al., "Limitations and Improvements of Machine Learning
+Workload Scheduling in Cloud Computing", 2019 (Alibaba).
+Su et al., "Robust Anomaly Detection for Multivariate Time Series through
+Stochastic Recurrent Neural Network", 2019 (SMD / OmniAnomaly).
 """
 
-import json
 import logging
 from pathlib import Path
 
@@ -36,12 +41,8 @@ logger = logging.getLogger(__name__)
 # Paths
 # ---------------------------------------------------------------------------
 
-NAB_ROOT = Path("data/raw/nab")
 ALIBABA_ROOT = Path("data/raw/alibaba")
 PROCESSED_DIR = Path("data/processed")
-
-# NAB categories used for CloudDrift
-NAB_CATEGORIES = ["realAWSCloudwatch", "realKnownCause"]
 
 # ---------------------------------------------------------------------------
 # Alibaba Cluster Trace constants
@@ -65,7 +66,6 @@ ALIBABA_COLUMNS = [
 ALIBABA_DISK_IO_SENTINELS = {-1, 101}
 
 # Reference epoch for converting Alibaba time_stamp (seconds) to datetime
-# The 2018 trace starts approximately at this date
 ALIBABA_BASE_TIME = pd.Timestamp("2018-01-01 00:00:00")
 
 # CloudDrift standard column names mapped from Alibaba names
@@ -77,76 +77,24 @@ ALIBABA_RENAME_MAP = {
     "disk_io_percent": "disk_io",
 }
 
-
 # ---------------------------------------------------------------------------
-# Public interface — NAB
+# SMD constants
 # ---------------------------------------------------------------------------
 
+SMD_ROOT = Path("data/raw/smd")
+SMD_DATA_DIR = "ServerMachineDataset"
+SMD_BASE_TIME = pd.Timestamp("2024-01-01 00:00:00")
 
-def load_nab_dataset(nab_root: str | Path = NAB_ROOT) -> pd.DataFrame:
-    """
-    Load Numenta Anomaly Benchmark time-series with anomaly labels.
-
-    Reads all CSV files from NAB_CATEGORIES, attaches anomaly labels
-    from combined_windows.json, and returns a unified DataFrame.
-
-    Args:
-        nab_root: Path to the cloned NAB repository root.
-
-    Returns:
-        DataFrame with columns:
-            timestamp    — datetime64[ns]
-            value        — float64 (metric reading)
-            metric_name  — str (filename stem)
-            category     — str (NAB category)
-            source_file  — str (category/filename.csv)
-            is_anomaly   — bool
-
-    Raises:
-        FileNotFoundError: If nab_root or labels file does not exist.
-        ValueError: If no data files load successfully.
-    """
-    nab_root = Path(nab_root)
-    data_path = nab_root / "data"
-    labels_path = nab_root / "labels" / "combined_windows.json"
-
-    if not data_path.exists():
-        raise FileNotFoundError(f"NAB data directory not found: {data_path}")
-    if not labels_path.exists():
-        raise FileNotFoundError(f"NAB labels file not found: {labels_path}")
-
-    with open(labels_path) as f:
-        anomaly_windows = json.load(f)
-
-    frames = []
-    for category in NAB_CATEGORIES:
-        category_path = data_path / category
-        if not category_path.exists():
-            logger.warning("NAB category not found, skipping: %s", category)
-            continue
-
-        csv_files = sorted(category_path.glob("*.csv"))
-        logger.info("Loading %d files from %s", len(csv_files), category)
-
-        for csv_file in csv_files:
-            df = _load_nab_csv(csv_file, category, anomaly_windows)
-            if df is not None:
-                frames.append(df)
-
-    if not frames:
-        raise ValueError("No NAB data files loaded successfully.")
-
-    combined = pd.concat(frames, ignore_index=True)
-    combined = combined.sort_values("timestamp").reset_index(drop=True)
-
-    n_anomaly = combined["is_anomaly"].sum()
-    logger.info(
-        "NAB loaded: %s rows | %s anomaly rows (%.1f%%)",
-        f"{len(combined):,}",
-        f"{n_anomaly:,}",
-        combined["is_anomaly"].mean() * 100,
-    )
-    return combined
+# SMD column indices → CloudDrift standard names (0-indexed, 38 cols total).
+# Mapping based on OmniAnomaly paper supplementary and common SMD releases.
+# Only these five are selected; the remaining 33 are dropped.
+SMD_COL_MAP: dict[int, str] = {
+    0: "cpu_util",
+    1: "net_io_in",
+    2: "net_io_out",
+    3: "disk_io",
+    5: "mem_util",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +126,6 @@ def load_alibaba_cluster_trace(
     Args:
         alibaba_root:  Directory containing machine_usage.csv.
         max_machines:  Number of unique machine IDs to retain.
-                       Reduces output to a manageable subset.
         chunk_size:    Rows per read chunk (default 500,000).
         max_rows:      Stop reading after this many rows have been
                        collected for the target machines.
@@ -207,8 +154,8 @@ def load_alibaba_cluster_trace(
 
     for chunk in pd.read_csv(
         csv_path,
-        header=None,  # no header row in the file
-        names=ALIBABA_COLUMNS,  # assign column names explicitly
+        header=None,
+        names=ALIBABA_COLUMNS,
         dtype={
             "machine_id": str,
             "time_stamp": float,
@@ -223,7 +170,6 @@ def load_alibaba_cluster_trace(
         chunksize=chunk_size,
         low_memory=False,
     ):
-        # On the first chunk, decide which machines to track
         if target_machines is None:
             all_machines = chunk["machine_id"].dropna().unique()
             target_machines = set(all_machines[:max_machines])
@@ -266,6 +212,98 @@ def load_alibaba_cluster_trace(
         "Alibaba loaded: %s rows | %d machines",
         f"{len(combined):,}",
         combined["machine_id"].nunique() if "machine_id" in combined.columns else 0,
+    )
+    return combined
+
+
+# ---------------------------------------------------------------------------
+# Public interface — SMD
+# ---------------------------------------------------------------------------
+
+
+def load_smd_dataset(
+    smd_root: str | Path = SMD_ROOT,
+    machines: list[str] | None = None,
+) -> pd.DataFrame:
+    """
+    Load Server Machine Dataset (SMD) with anomaly labels.
+
+    SMD contains telemetry from 28 server machines split into pre-defined
+    train and test periods of approximately equal length (~28 days each).
+    Train data is guaranteed anomaly-free by the dataset authors; test data
+    contains labeled anomalies at roughly 4% overall rate.
+
+    Each machine is loaded as [train rows, test rows] concatenated in
+    chronological order. Synthetic timestamps at 1-minute intervals are
+    assigned starting from SMD_BASE_TIME, since the dataset contains no
+    real timestamps.
+
+    Five columns are selected from the 38-dimensional raw files and renamed
+    to CloudDrift standard names (cpu_util, mem_util, net_io_in, net_io_out,
+    disk_io), enabling direct reuse of build_alibaba_features() without any
+    changes to feature engineering.
+
+    The source_file column is set equal to machine_id. This is required for
+    compatibility with SequenceDataset and compute_reconstruction_errors()
+    in tcn_autoencoder.py, which group by source_file by default.
+
+    Args:
+        smd_root: Path to the directory containing ServerMachineDataset/.
+                  Default: data/raw/smd/
+        machines: Specific machine names to load, e.g. ["machine-1-1"].
+                  Loads all 28 machines if None.
+
+    Returns:
+        DataFrame with columns:
+            machine_id  — str  (e.g. "machine-1-1")
+            source_file — str  (alias of machine_id; required for TCN grouping)
+            timestamp   — datetime64[ns] (synthetic, 1-minute intervals)
+            cpu_util    — float [0, 1]  (SMD column 0)
+            net_io_in   — float [0, 1]  (SMD column 1)
+            net_io_out  — float [0, 1]  (SMD column 2)
+            disk_io     — float [0, 1]  (SMD column 3)
+            mem_util    — float [0, 1]  (SMD column 5)
+            is_anomaly  — bool
+
+    Raises:
+        FileNotFoundError: If smd_root or any required subdirectory is absent.
+        ValueError: If no machine files load successfully.
+    """
+    smd_root = Path(smd_root)
+    data_root = smd_root / SMD_DATA_DIR
+    train_dir = data_root / "train"
+    test_dir = data_root / "test"
+    label_dir = data_root / "test_label"
+
+    for d in (train_dir, test_dir, label_dir):
+        if not d.exists():
+            raise FileNotFoundError(f"SMD directory not found: {d}")
+
+    all_machines = sorted(p.stem for p in train_dir.glob("machine-*.txt"))
+    if not all_machines:
+        raise FileNotFoundError(f"No machine-*.txt files found in {train_dir}")
+
+    target = machines if machines is not None else all_machines
+    logger.info("Loading SMD: %d of %d machines", len(target), len(all_machines))
+
+    frames = []
+    for machine_name in target:
+        df = _load_smd_machine(machine_name, train_dir, test_dir, label_dir)
+        if df is not None:
+            frames.append(df)
+
+    if not frames:
+        raise ValueError("No SMD machine files loaded successfully.")
+
+    combined = pd.concat(frames, ignore_index=True)
+
+    n_anomaly = combined["is_anomaly"].sum()
+    logger.info(
+        "SMD loaded: %s rows | %d machines | %s anomaly rows (%.1f%%)",
+        f"{len(combined):,}",
+        combined["machine_id"].nunique(),
+        f"{n_anomaly:,}",
+        combined["is_anomaly"].mean() * 100,
     )
     return combined
 
@@ -327,66 +365,6 @@ def get_dataset_summary(df: pd.DataFrame, name: str = "dataset") -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Private helpers — NAB
-# ---------------------------------------------------------------------------
-
-
-def _load_nab_csv(
-    csv_file: Path,
-    category: str,
-    anomaly_windows: dict,
-) -> pd.DataFrame | None:
-    """Load one NAB CSV file and attach anomaly labels."""
-    try:
-        df = pd.read_csv(csv_file)
-        df.columns = df.columns.str.strip()
-
-        if "timestamp" not in df.columns or "value" not in df.columns:
-            logger.warning(
-                "Unexpected columns in %s: %s",
-                csv_file.name,
-                df.columns.tolist(),
-            )
-            return None
-
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df["metric_name"] = csv_file.stem
-        df["category"] = category
-        df["source_file"] = f"{category}/{csv_file.name}"
-
-        label_key = f"{category}/{csv_file.name}"
-        windows = anomaly_windows.get(label_key, [])
-        df["is_anomaly"] = _label_anomalies(df["timestamp"], windows)
-
-        return df
-
-    except Exception:
-        logger.exception("Failed to load %s", csv_file)
-        return None
-
-
-def _label_anomalies(timestamps: pd.Series, windows: list) -> pd.Series:
-    """
-    Mark each timestamp True if it falls within any anomaly window.
-
-    Args:
-        timestamps: Series of datetime64 timestamps.
-        windows:    List of [start_str, end_str] pairs from combined_windows.json.
-
-    Returns:
-        Boolean Series aligned with timestamps.index.
-    """
-    labels = pd.Series(False, index=timestamps.index)
-    for window in windows:
-        start = pd.to_datetime(window[0])
-        end = pd.to_datetime(window[1])
-        mask = (timestamps >= start) & (timestamps <= end)
-        labels = labels | mask
-    return labels
-
-
-# ---------------------------------------------------------------------------
 # Private helpers — Alibaba
 # ---------------------------------------------------------------------------
 
@@ -414,7 +392,6 @@ def _normalise_alibaba_columns(df: pd.DataFrame) -> pd.DataFrame | None:
         logger.warning("Alibaba DataFrame missing required columns: %s", missing)
         return None
 
-    # 1 — Convert time_stamp (seconds) to datetime
     if "time_stamp" in df.columns:
         df["timestamp"] = ALIBABA_BASE_TIME + pd.to_timedelta(
             pd.to_numeric(df["time_stamp"], errors="coerce"),
@@ -423,7 +400,6 @@ def _normalise_alibaba_columns(df: pd.DataFrame) -> pd.DataFrame | None:
     else:
         logger.warning("time_stamp column not found — timestamp will be absent")
 
-    # 2 — Replace disk_io_percent sentinel values before rename
     if "disk_io_percent" in df.columns:
         df["disk_io_percent"] = pd.to_numeric(df["disk_io_percent"], errors="coerce")
         sentinel_mask = df["disk_io_percent"].isin(ALIBABA_DISK_IO_SENTINELS)
@@ -435,15 +411,124 @@ def _normalise_alibaba_columns(df: pd.DataFrame) -> pd.DataFrame | None:
             )
             df.loc[sentinel_mask, "disk_io_percent"] = float("nan")
 
-    # 3 — Rename to CloudDrift standard names
     df = df.rename(columns=ALIBABA_RENAME_MAP)
 
-    # 4 — Clip percentage columns to valid range [0, 100]
     for col in ["cpu_util", "mem_util", "net_io_in", "net_io_out", "disk_io"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").clip(0, 100)
 
-    # 5 — Drop sparse columns not used in CloudDrift feature engineering
     df = df.drop(columns=["mem_gps", "mkpi", "time_stamp"], errors="ignore")
 
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Private helpers — SMD
+# ---------------------------------------------------------------------------
+
+
+def _load_smd_machine(
+    machine_name: str,
+    train_dir: Path,
+    test_dir: Path,
+    label_dir: Path,
+) -> pd.DataFrame | None:
+    """
+    Load one SMD machine: train rows (normal) followed by test rows (labeled).
+
+    Train rows receive is_anomaly=False — the SMD dataset guarantees that
+    train files contain only normal operating periods. Test rows receive
+    binary labels from the corresponding test_label file.
+
+    Synthetic timestamps are assigned as sequential 1-minute offsets from
+    SMD_BASE_TIME, with row 0 of train receiving timestamp 0 and the first
+    row of test continuing immediately after the last train row.
+
+    Args:
+        machine_name: Stem of the machine file, e.g. "machine-1-1".
+        train_dir:    Path to ServerMachineDataset/train/.
+        test_dir:     Path to ServerMachineDataset/test/.
+        label_dir:    Path to ServerMachineDataset/test_label/.
+
+    Returns:
+        DataFrame for this machine, or None on load failure.
+    """
+    train_file = train_dir / f"{machine_name}.txt"
+    test_file = test_dir / f"{machine_name}.txt"
+    label_file = label_dir / f"{machine_name}.txt"
+
+    missing = [str(f) for f in (train_file, test_file, label_file) if not f.exists()]
+    if missing:
+        logger.warning("Skipping %s — files not found: %s", machine_name, missing)
+        return None
+
+    try:
+        train_raw = pd.read_csv(train_file, header=None)
+        test_raw = pd.read_csv(test_file, header=None)
+        labels_raw = pd.read_csv(label_file, header=None, names=["is_anomaly"])
+
+        if len(test_raw) != len(labels_raw):
+            logger.warning(
+                "%s: test rows (%d) != label rows (%d) — skipping",
+                machine_name,
+                len(test_raw),
+                len(labels_raw),
+            )
+            return None
+
+        train_df = _select_smd_columns(train_raw)
+        test_df = _select_smd_columns(test_raw)
+
+        train_df["is_anomaly"] = False
+        test_df["is_anomaly"] = labels_raw["is_anomaly"].astype(bool).values
+
+        combined = pd.concat([train_df, test_df], ignore_index=True)
+
+        combined["timestamp"] = SMD_BASE_TIME + pd.to_timedelta(
+            range(len(combined)), unit="min"
+        )
+        combined["machine_id"] = machine_name
+        combined["source_file"] = machine_name  # TCN group_col compatibility
+
+        n_anom = int(test_df["is_anomaly"].sum())
+        logger.debug(
+            "%s | train=%s test=%s anomalies=%d (%.1f%%)",
+            machine_name,
+            f"{len(train_df):,}",
+            f"{len(test_df):,}",
+            n_anom,
+            test_df["is_anomaly"].mean() * 100 if len(test_df) > 0 else 0.0,
+        )
+        return combined
+
+    except Exception:
+        logger.exception("Failed to load machine %s", machine_name)
+        return None
+
+
+def _select_smd_columns(raw_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Select 5 SMD columns by index and rename to CloudDrift standard names.
+
+    SMD raw files contain 38 unnamed float columns. Five are selected based
+    on their known semantic mapping (cpu_util, net_io_in, net_io_out,
+    disk_io, mem_util) to match the column names expected by
+    build_alibaba_features() in features/engineering.py.
+
+    SMD values are published pre-normalized to approximately [0, 1].
+    Clipping enforces exact [0, 1] bounds to prevent Pandera schema
+    failures from floating-point boundary values.
+
+    Args:
+        raw_df: Raw DataFrame from pd.read_csv() on an SMD .txt file.
+                Expected to have at least 6 columns (indices 0–5).
+
+    Returns:
+        DataFrame with 5 float columns in [0, 1].
+    """
+    col_indices = list(SMD_COL_MAP.keys())  # [0, 1, 2, 3, 5]
+    df = raw_df[col_indices].copy()
+    df.columns = [SMD_COL_MAP[i] for i in col_indices]
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce").clip(0.0, 1.0)
     return df

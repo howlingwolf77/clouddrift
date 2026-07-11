@@ -21,7 +21,9 @@ from src.models.tcn_autoencoder import (
 )
 
 ARTIFACT_EXISTS = Path("artifacts/tcn_autoencoder.pt").exists()
-FEATURES_EXIST = Path("data/processed/nab_val_features.parquet").exists()
+FEATURES_EXIST = (
+    False  # SMD pipeline uses in-memory splits — no parquet feature artifacts
+)
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +302,7 @@ class TestArtifactIO:
 
         model = load_tcn_autoencoder()
         with open("artifacts/feature_metadata.json") as f:
-            fc = json.load(f)["nab_feature_cols"]
+            fc = json.load(f)["feature_cols"]
         val = pd.read_parquet("data/processed/nab_val_features.parquet")
         errors = compute_reconstruction_errors(model, val, fc)
         normal_mean = errors[~val["is_anomaly"]].dropna().mean()
@@ -352,7 +354,7 @@ class TestTCNIntegration:
 
         model = load_tcn_autoencoder()
         with open("artifacts/feature_metadata.json") as f:
-            fc = json.load(f)["nab_feature_cols"]
+            fc = json.load(f)["feature_cols"]
         val = pd.read_parquet("data/processed/nab_val_features.parquet")
         sample = val.groupby("source_file").head(35)
         errors = compute_reconstruction_errors(model, sample, fc)
@@ -369,7 +371,7 @@ class TestTCNIntegration:
 
         model = load_tcn_autoencoder()
         with open("artifacts/feature_metadata.json") as f:
-            fc = json.load(f)["nab_feature_cols"]
+            fc = json.load(f)["feature_cols"]
         val = pd.read_parquet("data/processed/nab_val_features.parquet")
         errors = compute_reconstruction_errors(model, val, fc)
         normal_mean = errors[~val["is_anomaly"]].dropna().mean()

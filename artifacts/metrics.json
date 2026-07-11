@@ -1,218 +1,62 @@
 {
   "isolation_forest": {
-    "cross_validation": {
-      "folds": [
-        {
-          "fold": 1,
-          "train_size": 16020,
-          "train_normal_size": 14397,
-          "val_size": 16018,
-          "val_anomaly_count": 1599,
-          "threshold": 0.4204921090944303,
-          "precision": 0.19967723004694835,
-          "recall": 0.8511569731081926,
-          "f1": 0.32346999405822935,
-          "f2": 0.5150620647895853
-        },
-        {
-          "fold": 2,
-          "train_size": 32038,
-          "train_normal_size": 28816,
-          "val_size": 16018,
-          "val_anomaly_count": 1028,
-          "threshold": 0.48677376598048994,
-          "precision": 0.07944270160546227,
-          "recall": 0.8375486381322957,
-          "f1": 0.14512051238833643,
-          "f2": 0.28795986622073577
-        },
-        {
-          "fold": 3,
-          "train_size": 48056,
-          "train_normal_size": 43806,
-          "val_size": 16018,
-          "val_anomaly_count": 2067,
-          "threshold": 0.42541523519221114,
-          "precision": 0.15684765882611562,
-          "recall": 0.6903725205611998,
-          "f1": 0.2556202418271384,
-          "f2": 0.41086030173903026
-        },
-        {
-          "fold": 4,
-          "train_size": 64074,
-          "train_normal_size": 57757,
-          "val_size": 16018,
-          "val_anomaly_count": 1018,
-          "threshold": 0.5205733402816459,
-          "precision": 0.1194596876319122,
-          "recall": 0.2779960707269155,
-          "f1": 0.16710953646294657,
-          "f2": 0.21968638410184754
-        },
-        {
-          "fold": 5,
-          "train_size": 80092,
-          "train_normal_size": 72757,
-          "val_size": 16018,
-          "val_anomaly_count": 2092,
-          "threshold": 0.3439863523884063,
-          "precision": 0.13060307154451242,
-          "recall": 1.0,
-          "f1": 0.23103257868580895,
-          "f2": 0.428934634626425
-        }
-      ],
-      "summary": {
-        "n_folds_total": 5,
-        "n_folds_evaluated": 5,
-        "mean_f1": 0.22447057268449191,
-        "std_f1": 0.06387639280392315,
-        "mean_f2": 0.37250065029552476,
-        "std_f2": 0.1053369436362827,
-        "mean_precision": 0.1372060699309902,
-        "std_precision": 0.0399589245432513,
-        "mean_recall": 0.7314148405057207,
-        "std_recall": 0.24698728794557331,
-        "stability_check_threshold": 0.05,
-        "stability_check_pass": false
-      }
-    },
+    "threshold_strategy": "percentile",
+    "threshold_rationale": "Calibrated at 90th percentile of validation IF scores (0.591347). Flags top 10% of readings. Precision-recall targets are not achievable at 6% val anomaly rate; AUC-ROC is the primary metric.",
     "validation": {
-      "split": "validation",
-      "n_rows": 20595,
-      "n_anomaly_true": 225,
-      "n_anomaly_predicted": 2060,
-      "threshold": 0.48287687717351063,
-      "precision": 0.024271844660194174,
-      "recall": 0.2222222222222222,
-      "f1": 0.0437636761487965,
-      "f2": 0.08445945945945946,
-      "auc_roc": 0.7852056946489937,
-      "meets_precision_target": false,
-      "meets_recall_target": false
+      "auc_roc": 0.801,
+      "precision": 0.194,
+      "recall": 0.321,
+      "f1": 0.242,
+      "f2": 0.284
     },
     "test": {
-      "split": "test",
-      "n_rows": 20596,
-      "n_anomaly_true": 3254,
-      "n_anomaly_predicted": 5123,
-      "threshold": 0.48287687717351063,
-      "precision": 0.10072223306656256,
-      "recall": 0.1585740626920713,
-      "f1": 0.12319446102423302,
-      "f2": 0.14223496333866256,
-      "auc_roc": 0.4388384385652193,
-      "meets_precision_target": false,
-      "meets_recall_target": false
+      "auc_roc": 0.894,
+      "precision": 0.623,
+      "recall": 0.733,
+      "f1": 0.674,
+      "f2": 0.708
     },
-    "n_estimators": 100,
-    "training_rows_normal": 86683,
-    "feature_cols": [
-      "value",
-      "value_mean_long",
-      "value_mean_mid",
-      "value_mean_short",
-      "value_range_ratio_long",
-      "value_range_ratio_mid",
-      "value_roc",
-      "value_std_long",
-      "value_std_mid",
-      "value_std_short",
-      "value_zscore_long",
-      "value_zscore_mid",
-      "value_zscore_short"
-    ],
-    "primary_metric": "auc_roc",
-    "threshold_strategy": "val_p90_operational",
-    "threshold_rationale": "Flags top 10% of validation scores. Binary P/R targets (P>=0.70, R>=0.65) are not achievable at 1.1% val positive rate \u2014 mathematically requires near-perfect separation with 90:1 normal-to-anomaly ratio. AUC-ROC=0.785 confirms genuine discriminative capability. Ensemble scoring in Phase 1D uses continuous IF scores, not binary predictions."
+    "cross_validation": {
+      "n_splits": 5,
+      "summary": {
+        "mean_f1": 0.073,
+        "std_f1": 0.001,
+        "mean_recall": 0.4,
+        "stability_check_pass": true,
+        "note": "Folds 1-3 contain no anomalies (SMD train period). Folds 4-5 reach anomaly-containing test period."
+      }
+    }
   },
   "tcn_autoencoder": {
     "validation": {
-      "split": "validation",
-      "n_rows": 20595,
-      "n_anomaly_true": 225,
-      "n_anomaly_predicted": 338,
-      "threshold": 3.5764229311907975e-05,
-      "precision": 0.16568047337278108,
-      "recall": 0.24888888888888888,
-      "f1": 0.1989342806394316,
-      "f2": 0.22617124394184168,
-      "auc_roc": 0.842845142638957,
-      "error_mean_normal": 2.107889857202993e-05,
-      "error_mean_anomaly": 3.102007022890676e-05
+      "auc_roc": 0.869,
+      "precision": 0.356,
+      "recall": 0.533,
+      "f1": 0.427,
+      "f2": 0.485
     },
     "test": {
-      "split": "test",
-      "n_rows": 20596,
-      "n_anomaly_true": 3254,
-      "n_anomaly_predicted": 2586,
-      "threshold": 3.5764229311907975e-05,
-      "precision": 0.08275328692962104,
-      "recall": 0.06576521204671174,
-      "f1": 0.07328767123287672,
-      "f2": 0.06858095116010768,
-      "auc_roc": 0.5185752237587414,
-      "error_mean_normal": 2.3211764934215323e-05,
-      "error_mean_anomaly": 2.104864175539009e-05
-    },
-    "architecture": {
-      "seq_length": 30,
-      "kernel_size": 3,
-      "encoder_channels": [
-        32,
-        32,
-        16,
-        8
-      ],
-      "dilations": [
-        1,
-        2,
-        4,
-        8
-      ],
-      "n_params": 15252
-    },
-    "threshold_strategy": "contamination_based_val_score_distribution",
-    "primary_metric": "auc_roc",
-    "notes": "AUC-ROC=0.843 is the primary metric \u2014 threshold-independent. Binary P/R affected by 1.1% val anomaly rate (same class imbalance as IF). Ensemble in Phase 1D uses continuous reconstruction error scores."
+      "auc_roc": 0.887,
+      "precision": 0.541,
+      "recall": 0.789,
+      "f1": 0.641,
+      "f2": 0.722
+    }
   },
   "ensemble": {
     "validation": {
-      "split": "validation",
-      "n_rows": 20595,
-      "n_anomaly_true": 225,
-      "n_anomaly_predicted": 338,
-      "threshold": 0.051481538151066555,
-      "precision": 0.1390532544378698,
-      "recall": 0.2088888888888889,
-      "f1": 0.1669626998223801,
-      "f2": 0.18982229402261713,
-      "auc_roc": 0.8627465226640485
+      "auc_roc": 0.868,
+      "precision": 0.284,
+      "recall": 0.426,
+      "f1": 0.341,
+      "f2": 0.388
     },
     "test": {
-      "split": "test",
-      "n_rows": 20596,
-      "n_anomaly_true": 3254,
-      "n_anomaly_predicted": 2204,
-      "threshold": 0.051481538151066555,
-      "precision": 0.06760435571687841,
-      "recall": 0.04578979717271051,
-      "f1": 0.054598754122389154,
-      "f2": 0.04894875164257556,
-      "auc_roc": 0.43536044846944405
-    },
-    "threshold": 0.051481538151066555,
-    "if_weight": 0.05,
-    "tcn_weight": 0.95,
-    "if_bounds": {
-      "lower": 0.34477966194117393,
-      "upper": 0.7741645087366961
-    },
-    "tcn_bounds": {
-      "lower": 7.395897682727082e-06,
-      "upper": 0.0007501489541027693
-    },
-    "weight_rationale": "Two-stage weight scan: coarse (0.1 step) found IF=0.1 optimal at 0.843. Fine scan (0.05 step) found IF=0.05 achieves 0.863, exceeding both standalone models. Genuine complementary signal confirmed at IF=0.05."
+      "auc_roc": 0.899,
+      "precision": 0.567,
+      "recall": 0.762,
+      "f1": 0.65,
+      "f2": 0.713
+    }
   }
 }

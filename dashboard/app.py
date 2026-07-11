@@ -98,7 +98,7 @@ MAX_HISTORY = st.sidebar.slider(
 
 st.sidebar.markdown("---")
 st.sidebar.caption(
-    "Model: IF + TCN Ensemble | Val AUC-ROC: 0.863 | Weights: IF=0.05, TCN=0.95"
+    "Model: IF + TCN Ensemble | Test AUC-ROC: 0.899 | Weights: IF=0.40, TCN=0.60"
 )
 
 
@@ -200,7 +200,7 @@ _SEVERITY_BG = {
 st.title("🔍 CloudDrift — Live Anomaly Dashboard")
 st.caption(
     "Real-time cloud infrastructure anomaly detection | "
-    "IF + TCN Ensemble (Val AUC-ROC = 0.863)"
+    "IF + TCN Ensemble (Test AUC-ROC = 0.899)"
 )
 
 # ---------------------------------------------------------------------------

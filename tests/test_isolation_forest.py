@@ -40,7 +40,9 @@ ARTIFACTS_EXIST = (
     and Path("artifacts/thresholds.joblib").exists()
     and Path("artifacts/metrics.json").exists()
 )
-FEATURES_EXIST = Path("data/processed/nab_train_features.parquet").exists()
+FEATURES_EXIST = (
+    False  # SMD pipeline uses in-memory splits — no parquet feature artifacts
+)
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +485,7 @@ class TestIFIntegration:
         model = load_isolation_forest()
         with open("artifacts/feature_metadata.json") as f:
             meta = json.load(f)
-        fc = meta["nab_feature_cols"]
+        fc = meta["feature_cols"]
         val = pd.read_parquet("data/processed/nab_val_features.parquet")
         scores = compute_anomaly_scores(model, val[fc].head(50))
         assert len(scores) == 50

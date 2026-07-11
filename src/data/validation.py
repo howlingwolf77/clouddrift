@@ -6,15 +6,17 @@ bad data raises an exception and stops the pipeline rather than
 silently corrupting model training.
 
 Key schemas:
-    NAB_RAW_SCHEMA      — validates the unified NAB DataFrame
-    ALIBABA_RAW_SCHEMA  — validates the Alibaba DataFrame (if present)
+    ALIBABA_RAW_SCHEMA  — validates the Alibaba Cluster Trace DataFrame
+    SMD_RAW_SCHEMA      — validates the Server Machine Dataset DataFrame
 
 Key functions:
-    validate_nab_schema()          — runs Pandera; raises on failure
-    validate_null_rates()          — null % per column vs threshold
-    validate_timestamp_continuity()— gap detection in time-series
-    generate_data_quality_report() — combines all checks into one dict
-    define_temporal_split()        — time-ordered train/val/test split
+    validate_smd_schema()              — runs Pandera; raises on failure
+    validate_alibaba_schema()          — runs Pandera; raises on failure
+    validate_null_rates()              — null % per column vs threshold
+    validate_timestamp_continuity()    — gap detection in time-series
+    generate_data_quality_report()     — combines all checks into one dict
+    define_temporal_split()            — time-ordered train/val/test split
+    define_temporal_split_per_series() — per-machine temporal split
 """
 
 import logging
@@ -42,26 +44,6 @@ NEGATIVE_VALUE_COLS = [  # columns that must never go below zero
 # Pandera schemas
 # ---------------------------------------------------------------------------
 
-NAB_RAW_SCHEMA = DataFrameSchema(
-    columns={
-        "timestamp": Column(
-            pa.DateTime,
-            nullable=False,
-        ),
-        "value": Column(
-            pa.Float,
-            checks=Check.ge(0),
-            nullable=True,  # small number of nulls acceptable at ingestion
-        ),
-        "metric_name": Column(pa.String, nullable=False),
-        "category": Column(pa.String, nullable=False),
-        "source_file": Column(pa.String, nullable=False),
-        "is_anomaly": Column(pa.Bool, nullable=False),
-    },
-    coerce=True,  # attempt type coercion before failing
-    strict=False,  # allow extra columns
-)
-
 ALIBABA_RAW_SCHEMA = DataFrameSchema(
     columns={
         "cpu_util": Column(
@@ -74,7 +56,6 @@ ALIBABA_RAW_SCHEMA = DataFrameSchema(
             checks=[Check.ge(0), Check.le(100)],
             nullable=True,
         ),
-        # net_in/net_out are normalised to [0, 100] per Alibaba schema
         "net_io_in": Column(
             pa.Float,
             checks=[Check.ge(0), Check.le(100)],
@@ -97,39 +78,46 @@ ALIBABA_RAW_SCHEMA = DataFrameSchema(
     strict=False,  # machine_id and timestamp allowed as extra columns
 )
 
+SMD_RAW_SCHEMA = DataFrameSchema(
+    columns={
+        "machine_id": Column(pa.String, nullable=False),
+        "source_file": Column(pa.String, nullable=False),
+        "timestamp": Column(pa.DateTime, nullable=False),
+        "cpu_util": Column(
+            pa.Float,
+            checks=[Check.ge(0), Check.le(1)],  # SMD is pre-normalized to [0, 1]
+            nullable=True,
+        ),
+        "mem_util": Column(
+            pa.Float,
+            checks=[Check.ge(0), Check.le(1)],
+            nullable=True,
+        ),
+        "net_io_in": Column(
+            pa.Float,
+            checks=[Check.ge(0), Check.le(1)],
+            nullable=True,
+        ),
+        "net_io_out": Column(
+            pa.Float,
+            checks=[Check.ge(0), Check.le(1)],
+            nullable=True,
+        ),
+        "disk_io": Column(
+            pa.Float,
+            checks=[Check.ge(0), Check.le(1)],
+            nullable=True,
+        ),
+        "is_anomaly": Column(pa.Bool, nullable=False),
+    },
+    coerce=True,
+    strict=False,
+)
+
 
 # ---------------------------------------------------------------------------
 # Schema validation
 # ---------------------------------------------------------------------------
-
-
-def validate_nab_schema(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Run Pandera schema validation on the NAB DataFrame.
-
-    This is a blocking gate — raises pa.errors.SchemaErrors if
-    the DataFrame does not match NAB_RAW_SCHEMA.
-
-    Args:
-        df: Output of load_nab_dataset()
-
-    Returns:
-        Validated DataFrame (same data, Pandera-typed)
-
-    Raises:
-        pa.errors.SchemaErrors: On validation failure (lazy mode —
-            all errors collected before raising).
-    """
-    logger.info("Running Pandera NAB schema validation...")
-    try:
-        validated = NAB_RAW_SCHEMA.validate(df, lazy=True)
-        logger.info("NAB schema validation passed — %s rows validated", f"{len(df):,}")
-        return validated
-    except pa.errors.SchemaErrors as exc:
-        n_failures = len(exc.failure_cases)
-        logger.error("NAB schema validation FAILED — %d failure cases", n_failures)
-        logger.error("Failure summary:\n%s", exc.failure_cases.head(10).to_string())
-        raise
 
 
 def validate_alibaba_schema(df: pd.DataFrame) -> pd.DataFrame:
@@ -154,6 +142,39 @@ def validate_alibaba_schema(df: pd.DataFrame) -> pd.DataFrame:
         raise
 
 
+def validate_smd_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Run Pandera schema validation on the SMD DataFrame.
+
+    This is a blocking gate — raises pa.errors.SchemaErrors if the
+    DataFrame does not match SMD_RAW_SCHEMA. Call immediately after
+    load_smd_dataset() before any feature engineering.
+
+    SMD metric columns are validated in [0, 1] (pre-normalized by the
+    dataset authors), unlike Alibaba which uses [0, 100].
+
+    Args:
+        df: Output of load_smd_dataset()
+
+    Returns:
+        Validated DataFrame (same data, Pandera-typed)
+
+    Raises:
+        pa.errors.SchemaErrors: On validation failure (lazy mode —
+            all errors collected before raising).
+    """
+    logger.info("Running Pandera SMD schema validation...")
+    try:
+        validated = SMD_RAW_SCHEMA.validate(df, lazy=True)
+        logger.info("SMD schema validation passed — %s rows validated", f"{len(df):,}")
+        return validated
+    except pa.errors.SchemaErrors as exc:
+        n_failures = len(exc.failure_cases)
+        logger.error("SMD schema validation FAILED — %d failure cases", n_failures)
+        logger.error("Failure summary:\n%s", exc.failure_cases.head(10).to_string())
+        raise
+
+
 # ---------------------------------------------------------------------------
 # Data quality checks
 # ---------------------------------------------------------------------------
@@ -172,7 +193,6 @@ def validate_null_rates(
 
     Returns:
         Dict mapping column name → {null_pct, pass, threshold}.
-        Pass is True when null_pct <= max_null_pct.
     """
     null_rates = (df.isnull().mean() * 100).round(3)
     results = {}
@@ -207,16 +227,15 @@ def validate_timestamp_continuity(
     Detect timestamp gaps larger than max_gap_multiplier × median interval.
 
     For single time-series data, gaps are checked across all rows.
-    For concatenated multi-series data (e.g. NAB with many source files),
-    pass group_col="source_file" to check continuity within each series
-    independently. Inter-series gaps are expected and should not fail.
+    For concatenated multi-series data (e.g. SMD with many machines),
+    pass group_col="machine_id" to check continuity within each machine
+    independently. Inter-machine gaps are expected and should not fail.
 
     Args:
         df:                 DataFrame containing the timestamp column.
         timestamp_col:      Name of the timestamp column.
         max_gap_multiplier: Flag gaps > this multiple of the median interval.
         group_col:          Optional column to group by before checking gaps.
-                            Use "source_file" for NAB to check per time-series.
 
     Returns:
         Dict with gap statistics and pass/fail flag.
@@ -224,13 +243,11 @@ def validate_timestamp_continuity(
     if timestamp_col not in df.columns:
         return {"error": f"Column '{timestamp_col}' not found", "pass": False}
 
-    # Per-series mode: group by group_col and check each series independently
     if group_col and group_col in df.columns:
         return _validate_continuity_per_series(
             df, timestamp_col, max_gap_multiplier, group_col
         )
 
-    # Single-series mode: check all rows together
     ts = pd.to_datetime(df[timestamp_col]).sort_values().reset_index(drop=True)
     gaps_minutes = ts.diff().dt.total_seconds().div(60).dropna()
 
@@ -249,8 +266,7 @@ def validate_timestamp_continuity(
         "large_gap_count": len(large_gaps),
         "max_gap_minutes": round(float(gaps_minutes.max()), 2),
         "mean_gap_minutes": round(float(gaps_minutes.mean()), 2),
-        # Always True — continuity is informational; overall_pass excludes it.
-        "pass": True,
+        "pass": True,  # continuity is informational; overall_pass excludes it
     }
 
     if large_gaps.any():
@@ -262,10 +278,7 @@ def validate_timestamp_continuity(
             gaps_minutes.max(),
         )
     else:
-        logger.info(
-            "Timestamp continuity: no gaps > %.1f min",
-            threshold,
-        )
+        logger.info("Timestamp continuity: no gaps > %.1f min", threshold)
 
     return result
 
@@ -280,15 +293,13 @@ def _validate_continuity_per_series(
     """
     Check timestamp continuity within each group independently.
 
-    Used for concatenated multi-series datasets (NAB, Alibaba) where
+    Used for concatenated multi-series datasets (SMD, Alibaba) where
     inter-series gaps are expected and should not cause a failure.
 
     Args:
         min_threshold_minutes: Floor on the gap threshold. Prevents the
             threshold from becoming near-zero when readings from multiple
-            machines with the same timestamp are concatenated (Alibaba).
-            Default 5 minutes: a genuine gap under 5 minutes is not
-            operationally meaningful for anomaly detection.
+            machines with the same timestamp are concatenated.
     """
     series_results = {}
     total_large_gaps = 0
@@ -303,8 +314,6 @@ def _validate_continuity_per_series(
             continue
 
         median_gap = gaps_minutes.median()
-        # Apply minimum floor to prevent threshold = 0 when readings from
-        # multiple machines with identical timestamps are concatenated
         threshold = max(median_gap * max_gap_multiplier, min_threshold_minutes)
         large = gaps_minutes[gaps_minutes > threshold]
         total_large_gaps += len(large)
@@ -343,9 +352,7 @@ def _validate_continuity_per_series(
         "series_with_gaps": n_with_gaps,
         "total_large_gaps": total_large_gaps,
         "min_threshold_minutes": min_threshold_minutes,
-        # pass is always True here — continuity is informational only.
-        # overall_pass in generate_data_quality_report does not include this.
-        "pass": True,
+        "pass": True,  # continuity is informational only
         "series_detail": series_results,
     }
 
@@ -354,7 +361,9 @@ def validate_value_ranges(df: pd.DataFrame) -> dict:
     """
     Check that metric columns stay within valid physical bounds.
 
-    CPU and memory must be 0-100%. Network and disk I/O must be >= 0.
+    For SMD data (pre-normalized to [0, 1]), exceeds_100_count will
+    always be 0 since values never reach 100. For Alibaba data in [0, 100],
+    this check catches any unhandled sentinel values.
 
     Args:
         df: DataFrame with metric columns.
@@ -421,7 +430,7 @@ def generate_data_quality_report(
     logger.info("Generating data quality report for: %s", dataset_name)
 
     # Use per-series continuity check for concatenated multi-series datasets.
-    # NAB:     group by source_file  (each CSV is one independent time-series)
+    # SMD:     group by source_file  (each machine is one independent time-series)
     # Alibaba: group by machine_id   (each machine is one independent time-series)
     # Checking continuity across series produces false failures from expected
     # inter-series gaps when different machines are concatenated together.
@@ -454,7 +463,6 @@ def generate_data_quality_report(
             ),
         }
 
-    # Aggregate overall pass/fail
     null_checks = [
         v["pass"]
         for v in report["null_rate_check"].values()
@@ -469,11 +477,8 @@ def generate_data_quality_report(
     # Timestamp continuity is intentionally excluded from overall_pass.
     # Real-world training datasets contain genuine measurement gaps that
     # are properties of the collection system, not data quality failures.
-    # NAB contains heterogeneous series at different sampling rates;
-    # Alibaba has irregular collection intervals per machine.
-    # Gaps are handled at Day 3 feature engineering by the sequence
-    # windowing logic — sequences that span a gap are simply not created.
-    # overall_pass gates on null rates and value ranges only.
+    # Gaps are handled at feature engineering by the sequence windowing
+    # logic — sequences that span a gap are simply not created.
     report["overall_pass"] = all(null_checks) and all(range_checks)
     report["timestamp_continuity_informational"] = True
 
@@ -553,7 +558,6 @@ def define_temporal_split(
         test_df[timestamp_col].max(),
     )
 
-    # Verify temporal ordering — no leakage
     assert train_df[timestamp_col].max() <= val_df[timestamp_col].min(), (
         "DATA LEAKAGE: train set contains timestamps after val set start"
     )
@@ -575,25 +579,25 @@ def define_temporal_split_per_series(
     """
     Split each time-series independently then combine the portions.
 
-    For heterogeneous multi-series datasets (NAB has 24 independent series),
-    a global temporal split distributes series unevenly across splits — some
-    series land entirely in training, others entirely in test, producing
-    drastically different anomaly rates per split.
+    For multi-series datasets (SMD has 28 independent machines), a global
+    temporal split distributes machines unevenly across splits — some machines
+    land entirely in training, others entirely in test, producing drastically
+    different anomaly rates per split.
 
     Per-series splitting guarantees:
-      - Each series contributes to all three splits
+      - Each machine contributes to all three splits
       - Anomaly rate is approximately equal across splits
-      - Temporal ordering within each series is preserved (no leakage)
+      - Temporal ordering within each machine is preserved (no leakage)
 
     Process:
-      1. For each series: sort by timestamp, split at train_pct and val_pct
-      2. Combine all series' training portions → train_df
-      3. Combine all series' validation portions → val_df
-      4. Combine all series' test portions → test_df
+      1. For each machine: sort by timestamp, split at train_pct and val_pct
+      2. Combine all machines' training portions → train_df
+      3. Combine all machines' validation portions → val_df
+      4. Combine all machines' test portions → test_df
 
     Args:
         df:           DataFrame containing multiple independent time-series.
-        group_col:    Column identifying each independent series.
+        group_col:    Column identifying each independent series (machine).
         timestamp_col:Column to sort by within each series.
         train_pct:    Fraction for training (default 70%).
         val_pct:      Fraction for validation (default 15%).

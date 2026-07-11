@@ -29,7 +29,9 @@ from src.utils.explanation import (
 
 METADATA_EXISTS = Path("artifacts/ensemble_metadata.json").exists()
 REF_STATS_EXISTS = Path("artifacts/reference_stats.json").exists()
-FEATURES_EXIST = Path("data/processed/nab_val_features.parquet").exists()
+FEATURES_EXIST = (
+    False  # SMD pipeline uses in-memory splits — no parquet feature artifacts
+)
 
 
 # ---------------------------------------------------------------------------
@@ -305,8 +307,8 @@ class TestEnsembleIntegration:
 
     def test_metadata_loadable(self):
         meta = load_ensemble_metadata()
+        assert "val_auc_roc" in meta
         assert "val_metrics" in meta
-        assert "if_bounds" in meta
 
     def test_weights_sum_to_1(self):
         meta = load_ensemble_metadata()
@@ -327,7 +329,7 @@ class TestEnsembleIntegration:
 
         stats = load_reference_stats()
         with open("artifacts/feature_metadata.json") as f:
-            fc = json.load(f)["nab_feature_cols"]
+            fc = json.load(f)["feature_cols"]
         assert all(col in stats for col in fc)
 
     @pytest.mark.skipif(not FEATURES_EXIST, reason="Feature matrices missing")
@@ -345,7 +347,7 @@ class TestEnsembleIntegration:
 
         meta = load_ensemble_metadata()
         with open("artifacts/feature_metadata.json") as f:
-            fc = json.load(f)["nab_feature_cols"]
+            fc = json.load(f)["feature_cols"]
 
         val = pd.read_parquet("data/processed/nab_val_features.parquet")
         if_model = load_isolation_forest()
