@@ -64,14 +64,45 @@ indicates the models may need retraining.
 4. The report compares your current readings against the SMD training
    distribution (machine-1-1 through machine-1-7, normal-behavior period)
 
-**Interpreting results:**
+### Two monitoring layers — what they measure differently
 
-| Column | Status | Meaning |
-|--------|--------|---------|
-| drift_score | < 0.1 | No significant drift |
-| drift_score | 0.1–0.3 | Moderate drift — monitor closely |
-| drift_score | > 0.3 | Significant drift — consider retraining |
-| drifted | Yes | Wasserstein distance exceeded threshold |
+| Layer | Method | Measures | Works from |
+|-------|--------|----------|------------|
+| Z-score table (inline) | Mean deviation | First-order statistics — session mean vs training mean | 1 reading |
+| Evidently report | Kolmogorov-Smirnov test | Full distributional shape — every quantile | 30+ readings |
+
+The two layers will sometimes disagree. This is expected and informative:
+- All z-scores Stable + Evidently shows drift → session means are normal but
+  the *shape* of your readings differs from training. Common with small sessions.
+- Z-score shows Drifted + Evidently shows Not Detected → one metric's mean has
+  shifted but the overall distribution shape is still similar.
+
+**Interpreting Evidently Drift Score:**
+
+The "Drift Score" column is the **KS p-value**, not a drift magnitude.
+A score near 0 means the probability that the two distributions are
+identical is essentially zero — the strongest evidence of drift.
+A score of 0.14 means no significant difference detected.
+
+| Drift Score (p-value) | Meaning |
+|---|---|
+| < 0.05 | Drift Detected — distributions are statistically different |
+| ≥ 0.05 | Not Detected — distributions are consistent |
+
+**Sample size asymmetry:**
+
+CloudDrift's reference distribution contains ~235,908 training rows.
+The KS test becomes increasingly sensitive as the reference grows —
+even genuinely normal readings will show drift when your session has
+40 points and your reference has 235,000. This is a known statistical
+property of the KS test, not a model defect.
+
+Practical guidance:
+- Use z-score table for real-time per-reading monitoring
+- Accumulate 200+ readings before generating an Evidently report
+- Use Evidently for daily/weekly drift assessment, not per-session
+- If 3+ columns show drift at p < 0.001 consistently over hundreds of
+  readings, that is a genuine retraining signal
 
 **Important:** SMD metrics are in [0, 1] range (pre-normalized).
 The API accepts values in [0, 100] (percentage scale). Drift reports

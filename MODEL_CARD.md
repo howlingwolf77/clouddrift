@@ -163,6 +163,21 @@ in EarlyStopping allowed infinitesimal improvements to reset the
 patience counter). Future runs should use min_delta=0.0001. Final
 val_loss=0.0016 represents a well-converged model.
 
+### 5. Evidently KS Test Sensitivity at Low Sample Counts
+
+The Kolmogorov-Smirnov test used by Evidently compares the full
+distributional shape of current readings against the 235,908-row
+SMD training reference. With high reference n, the test has
+sufficient statistical power to detect even minor shape differences
+in sessions as small as 40 readings, producing drift detections
+that do not correspond to actionable distribution shift.
+
+**Implication:** Accumulate 200+ readings per session before
+treating Evidently drift detections as a retraining signal. Use
+the inline z-score table for real-time monitoring. The two layers
+measure different statistical properties and are designed to be
+used together, not as substitutes.
+
 ---
 
 ## Explainability

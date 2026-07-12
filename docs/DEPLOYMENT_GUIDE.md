@@ -1,7 +1,8 @@
 # CloudDrift Deployment Guide
 
 Two deployment modes: local development and Docker Compose.
-For EC2 deployment, see the project README.
+
+For EC2 deployment, see the EC2 Deployment section in `README.md`.
 
 ---
 
@@ -61,6 +62,25 @@ docker compose up --build
 docker compose --profile monitoring up --build
 ```
 Adds `prometheus` on port 9090.
+
+### Accessing Internal Services Securely (SSH Tunnel)
+
+If you do not want to open port 9090 publicly, use an SSH tunnel
+to forward the remote port to your local machine:
+
+```bash
+# Forward Prometheus (9090) through SSH — no security group change needed
+ssh -i ~/.ssh/clouddrift-key.pem \
+    -L 9090:localhost:9090 \
+    ubuntu@<EC2_IP> -N
+```
+
+Then open http://localhost:9090 in your local browser.
+The -N flag keeps the tunnel open without executing a remote command.
+Use Ctrl+C to close the tunnel when done.
+
+The same pattern works for any EC2 service port:
+-L <local_port>:localhost:<remote_port>
 
 **Stop everything:**
 ```bash

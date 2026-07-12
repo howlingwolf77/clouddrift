@@ -120,6 +120,56 @@ docker compose --profile monitoring up --build
 
 ---
 
+## EC2 Deployment
+
+CloudDrift is deployed to AWS EC2 and accessible at:
+- API: http://<EC2_IP>:8000/docs
+- Dashboard: http://<EC2_IP>:8501
+- Metrics: http://<EC2_IP>:8000/metrics
+
+**Deploy to a fresh EC2 instance (Ubuntu 22.04+):**
+
+```bash
+# On the EC2 instance
+git clone https://github.com/howlingwolf77/clouddrift.git
+cd clouddrift
+sudo apt-get update && sudo apt-get install -y docker.io docker-compose-plugin
+sudo usermod -aG docker ubuntu && newgrp docker
+
+# Transfer model artifacts from local machine
+# (run this from your local terminal)
+rsync -avz --delete \
+  -e "ssh -i ~/.ssh/clouddrift-key.pem" \
+  ~/projects/clouddrift/artifacts/ \
+  ubuntu@<EC2_IP>:~/clouddrift/artifacts/
+
+# Back on EC2 — start services
+docker compose up --build -d
+
+# Verify readiness
+curl http://localhost:8000/ready
+```
+
+**Required AWS security group inbound rules:**
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 22 | TCP | SSH access |
+| 8000 | TCP | FastAPI (public) |
+| 8501 | TCP | Streamlit dashboard (public) |
+| 9090 | TCP | Prometheus (optional — open only for demo) |
+
+**To access Prometheus without opening port 9090 publicly:**
+```bash
+ssh -i ~/.ssh/clouddrift-key.pem -L 9090:localhost:9090 ubuntu@<EC2_IP> -N
+```
+Then open http://localhost:9090 in your local browser.
+
+The same pattern works for any EC2 service port:
+-L <local_port>:localhost:<remote_port>
+
+---
+
 ## API Reference
 
 | Method | Endpoint | Description |

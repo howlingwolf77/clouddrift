@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Add project root to sys.path so 'dashboard' is importable as a package
 # when Streamlit runs this file directly (it adds dashboard/ to sys.path,
@@ -469,7 +470,8 @@ else:
 
                 # Embed the HTML report inline
                 st.markdown("#### Full Evidently Report")
-                st.iframe(html_path, height=600, scrolling=True)
+                with open(html_path, "r", encoding="utf-8") as _f:
+                    components.html(_f.read(), height=650, scrolling=True)
 
             except Exception as exc:
                 st.error(f"Failed to generate drift report: {exc}")
