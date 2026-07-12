@@ -470,7 +470,7 @@ else:
 
                 # Embed the HTML report inline
                 st.markdown("#### Full Evidently Report")
-                with open(html_path, "r", encoding="utf-8") as _f:
+                with open(html_path, encoding="utf-8") as _f:
                     components.html(_f.read(), height=650, scrolling=True)
 
             except Exception as exc:
