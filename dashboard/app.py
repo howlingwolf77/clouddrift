@@ -379,6 +379,7 @@ with col_table:
     st.markdown("### Recent Readings")
     display_cols = [
         "timestamp",
+        "machine_id",
         "cpu_util",
         "mem_util",
         "anomaly_score",
