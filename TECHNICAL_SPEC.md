@@ -75,13 +75,12 @@ data — not simulated data.
                          └── reference_stats.json
                                     |
                               [FastAPI Service]
-              /health  /ready  /detect  /batch_detect  /metrics
-                    |              |              |
-             [OpenTelemetry]  [Prometheus]  [Evidently AI]
-                    |              |              |
-               [Traces]     [/metrics]    [Drift Reports]
-                                    |
-                         [Streamlit Dashboard]
+              /health  /ready  /detect  /batch_detect   /metrics
+                 |                |                         |
+            [OpenTelemetry]  [Streamlit Ops Dashboard]      [Prometheus Server]
+            [per-req spans]      |           |              [scrapes /metrics]
+            [→ stdout]    [Anomaly scores] [Evidently AI]
+                                           [Drift Reports]
 ```
 
 ```mermaid
@@ -98,12 +97,11 @@ flowchart TD
     J --> K["/health and /ready"]
     J --> L["/detect and /batch_detect"]
     J --> M["/metrics"]
-    L --> N["OpenTelemetry<br/>Distributed Tracing"]
-    M --> O["Prometheus<br/>Counters and Histograms"]
-    L --> P["Evidently AI<br/>Drift Monitoring"]
-    N --> Q["Streamlit Ops Dashboard"]
-    P --> Q
-    O --> Q
+    L --> N["OpenTelemetry<br/>Distributed Tracing<br/>(per-request spans → stdout)"]
+    L --> O["Prometheus metrics<br/>(counters + histograms incremented per request)"]
+    L --> P["Streamlit Ops Dashboard<br/>Live scoring · Session history<br/>Z-score drift table"]
+    M --> Q["Prometheus Server<br/>(scrapes /metrics every 15s)"]
+    P --> R["Evidently AI Drift Monitoring<br/>(called by dashboard directly)"]
 ```
 
 ---

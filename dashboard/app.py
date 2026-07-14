@@ -41,6 +41,31 @@ from dashboard.drift_monitor import (
 )
 
 # ---------------------------------------------------------------------------
+# Constants — centralized so tuning requires one edit, not a file-wide search
+# ---------------------------------------------------------------------------
+
+CRITICAL_THRESHOLD = 0.75  # anomaly score ≥ this → Critical (3σ convention)
+WARNING_THRESHOLD = 0.50  # anomaly score ≥ this → Warning
+BURST_SIZE = 20  # readings sent by "Send 20 readings" button
+API_TIMEOUT = 5  # seconds for /detect calls
+READY_TIMEOUT = 3  # seconds for /ready liveness calls
+
+# Synthetic telemetry parameters — normal baseline
+NORMAL_CPU_MEAN, NORMAL_CPU_STD = 40, 10
+NORMAL_MEM_MEAN, NORMAL_MEM_STD = 60, 10
+NORMAL_NET_IN_MEAN, NORMAL_NET_IN_STD = 43, 8
+NORMAL_NET_OUT_MEAN, NORMAL_NET_OUT_STD = 33, 6
+NORMAL_DISK_MEAN, NORMAL_DISK_STD = 10, 8
+
+# Synthetic telemetry parameters — anomalous high-utilization
+ANOMALY_CPU_MEAN, ANOMALY_CPU_STD = 88, 5
+ANOMALY_MEM_MEAN, ANOMALY_MEM_STD = 92, 4
+ANOMALY_NET_IN_MEAN, ANOMALY_NET_IN_STD = 85, 8
+ANOMALY_NET_OUT_MEAN, ANOMALY_NET_OUT_STD = 78, 7
+ANOMALY_DISK_MEAN, ANOMALY_DISK_STD = 60, 10
+
+
+# ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
 
@@ -52,6 +77,21 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# Severity helpers — defined early so they can be reused throughout
+# ---------------------------------------------------------------------------
+
+_SEVERITY_COLOURS = {
+    "Critical": "🔴",
+    "Warning": "🟡",
+    "Normal": "🟢",
+}
+_SEVERITY_BG = {
+    "Critical": "#ff4444",
+    "Warning": "#ffaa00",
+    "Normal": "#00cc44",
+}
+
+# ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
@@ -59,8 +99,6 @@ st.sidebar.title("CloudDrift")
 st.sidebar.caption("Cloud Infrastructure Anomaly Detector")
 st.sidebar.markdown("---")
 
-# CLOUDDRIFT_API_URL env var is set in compose.yml for Docker deployments.
-# Falls back to localhost for local development.
 _DEFAULT_API_URL = os.environ.get("CLOUDDRIFT_API_URL", "http://localhost:8000")
 API_URL = st.sidebar.text_input(
     "API URL",
@@ -81,12 +119,20 @@ MODE = st.sidebar.radio(
     ),
 )
 
+# machine_id_manual initialised here (outside the Manual block) so all code
+# paths can reference it safely — fixes NameError in _generate_reading().
+machine_id_manual: str | None = None
+
 if MODE == "Manual input":
     st.sidebar.markdown("#### Enter telemetry values")
     cpu_manual = st.sidebar.slider("cpu_util (%)", 0.0, 100.0, 41.0)
     mem_manual = st.sidebar.slider("mem_util (%)", 0.0, 100.0, 72.0)
     netin_manual = st.sidebar.slider("net_io_in (%)", 0.0, 100.0, 43.0)
     netout_manual = st.sidebar.slider("net_io_out (%)", 0.0, 100.0, 33.0)
+    disk_manual = st.sidebar.slider("disk_io (%)", 0.0, 100.0, 5.0)
+    machine_id_manual = (
+        st.sidebar.text_input("machine_id (optional)", "machine-1-1") or None
+    )
 
 st.sidebar.markdown("---")
 MAX_HISTORY = st.sidebar.slider(
@@ -110,9 +156,6 @@ st.sidebar.caption(
 if "history" not in st.session_state:
     st.session_state.history: list[dict] = []
 
-if "api_ok" not in st.session_state:
-    st.session_state.api_ok = False
-
 if "reference_df" not in st.session_state:
     try:
         st.session_state.reference_df = load_reference_data()
@@ -125,30 +168,60 @@ if "reference_df" not in st.session_state:
 # ---------------------------------------------------------------------------
 
 
-def _generate_reading(mode: str) -> dict:
-    """Generate one telemetry snapshot in the requested mode."""
-    rng = np.random.default_rng()
+def _generate_reading(mode: str, machine_id: str | None = None) -> dict:
+    """
+    Generate one synthetic telemetry snapshot.
 
-    if mode == "Anomaly" or (mode == "Mixed (50/50)" and rng.random() < 0.5):
-        # High utilization — anomalous
-        return {
-            "cpu_util": float(np.clip(rng.normal(88, 5), 0, 100)),
-            "mem_util": float(np.clip(rng.normal(92, 4), 0, 100)),
-            "net_io_in": float(np.clip(rng.normal(85, 8), 0, 100)),
-            "net_io_out": float(np.clip(rng.normal(78, 7), 0, 100)),
-            "disk_io": float(np.clip(rng.normal(60, 10), 0, 100)),
-            "timestamp": datetime.now(UTC).isoformat(),
+    Args:
+        mode:       "Normal", "Anomaly", or "Mixed (50/50)"
+        machine_id: Optional machine identifier included in the payload.
+
+    Returns:
+        Dict matching the TelemetrySnapshot schema.
+    """
+    rng = np.random.default_rng()
+    is_anomaly = mode == "Anomaly" or (mode == "Mixed (50/50)" and rng.random() < 0.5)
+
+    if is_anomaly:
+        snap = {
+            "cpu_util": float(
+                np.clip(rng.normal(ANOMALY_CPU_MEAN, ANOMALY_CPU_STD), 0, 100)
+            ),
+            "mem_util": float(
+                np.clip(rng.normal(ANOMALY_MEM_MEAN, ANOMALY_MEM_STD), 0, 100)
+            ),
+            "net_io_in": float(
+                np.clip(rng.normal(ANOMALY_NET_IN_MEAN, ANOMALY_NET_IN_STD), 0, 100)
+            ),
+            "net_io_out": float(
+                np.clip(rng.normal(ANOMALY_NET_OUT_MEAN, ANOMALY_NET_OUT_STD), 0, 100)
+            ),
+            "disk_io": float(
+                np.clip(rng.normal(ANOMALY_DISK_MEAN, ANOMALY_DISK_STD), 0, 100)
+            ),
         }
     else:
-        # Baseline normal
-        return {
-            "cpu_util": float(np.clip(rng.normal(40, 10), 0, 100)),
-            "mem_util": float(np.clip(rng.normal(60, 10), 0, 100)),
-            "net_io_in": float(np.clip(rng.normal(43, 8), 0, 100)),
-            "net_io_out": float(np.clip(rng.normal(33, 6), 0, 100)),
-            "disk_io": float(np.clip(rng.normal(10, 8), 0, 100)),
-            "timestamp": datetime.now(UTC).isoformat(),
+        snap = {
+            "cpu_util": float(
+                np.clip(rng.normal(NORMAL_CPU_MEAN, NORMAL_CPU_STD), 0, 100)
+            ),
+            "mem_util": float(
+                np.clip(rng.normal(NORMAL_MEM_MEAN, NORMAL_MEM_STD), 0, 100)
+            ),
+            "net_io_in": float(
+                np.clip(rng.normal(NORMAL_NET_IN_MEAN, NORMAL_NET_IN_STD), 0, 100)
+            ),
+            "net_io_out": float(
+                np.clip(rng.normal(NORMAL_NET_OUT_MEAN, NORMAL_NET_OUT_STD), 0, 100)
+            ),
+            "disk_io": float(
+                np.clip(rng.normal(NORMAL_DISK_MEAN, NORMAL_DISK_STD), 0, 100)
+            ),
         }
+
+    snap["timestamp"] = datetime.now(UTC).isoformat()
+    snap["machine_id"] = machine_id
+    return snap
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +231,7 @@ def _generate_reading(mode: str) -> dict:
 
 def _check_ready(api_url: str) -> bool:
     try:
-        r = requests.get(f"{api_url}/ready", timeout=3)
+        r = requests.get(f"{api_url}/ready", timeout=READY_TIMEOUT)
         return r.status_code == 200
     except requests.RequestException:
         return False
@@ -169,29 +242,13 @@ def _detect(api_url: str, snapshot: dict) -> dict | None:
         r = requests.post(
             f"{api_url}/detect",
             json=snapshot,
-            timeout=5,
+            timeout=API_TIMEOUT,
         )
         if r.status_code == 200:
             return r.json()
         return None
     except requests.RequestException:
         return None
-
-
-# ---------------------------------------------------------------------------
-# Severity helpers
-# ---------------------------------------------------------------------------
-
-_SEVERITY_COLOURS = {
-    "Critical": "🔴",
-    "Warning": "🟡",
-    "Normal": "🟢",
-}
-_SEVERITY_BG = {
-    "Critical": "#ff4444",
-    "Warning": "#ffaa00",
-    "Normal": "#00cc44",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -234,60 +291,71 @@ with col_btn1:
 
 with col_btn2:
     burst = st.button(
-        "▶▶  Send 20 readings",
+        f"▶▶  Send {BURST_SIZE} readings",
         disabled=not api_status,
         width="stretch",
     )
 
 with col_btn3:
-    clear_hist = st.button(
-        "🗑  Clear history",
-        width="stretch",
-    )
-
-# ---------------------------------------------------------------------------
-# Handle button actions
-# ---------------------------------------------------------------------------
-
-if clear_hist:
-    st.session_state.history = []
-    st.rerun()
+    if st.button("🗑  Clear history", width="stretch"):
+        st.session_state.history = []
+        st.rerun()
 
 
-def _submit_reading():
+def _submit_reading() -> bool:
+    """
+    Build one telemetry snapshot, call /detect, and append to session history.
+
+    Returns True on success, False if the API call failed.
+    """
     if MODE == "Manual input":
         snap = {
             "cpu_util": cpu_manual,
             "mem_util": mem_manual,
             "net_io_in": netin_manual,
             "net_io_out": netout_manual,
+            "disk_io": disk_manual,
             "timestamp": datetime.now(UTC).isoformat(),
+            "machine_id": machine_id_manual,
         }
     else:
-        snap = _generate_reading(MODE)
+        snap = _generate_reading(MODE, machine_id=machine_id_manual)
 
     result = _detect(API_URL, snap)
     if result is None:
-        st.warning("API call failed — check connection")
-        return
+        return False
 
     entry = {**snap, **result}
     st.session_state.history.append(entry)
     if len(st.session_state.history) > MAX_HISTORY:
         st.session_state.history = st.session_state.history[-MAX_HISTORY:]
+    return True
 
 
 if single_shot:
-    _submit_reading()
+    if not _submit_reading():
+        st.warning("API call failed — check connection")
     st.rerun()
 
 if burst:
     progress = st.progress(0, text="Sending readings...")
-    for i in range(20):
-        _submit_reading()
+    succeeded = 0
+    failed = 0
+    for i in range(BURST_SIZE):
+        if _submit_reading():
+            succeeded += 1
+        else:
+            failed += 1
         time.sleep(0.05)
-        progress.progress((i + 1) / 20, text=f"Sending readings... {i + 1}/20")
+        progress.progress(
+            (i + 1) / BURST_SIZE,
+            text=f"Sending readings... {i + 1}/{BURST_SIZE}",
+        )
     progress.empty()
+    if failed > 0:
+        st.warning(
+            f"{succeeded} readings succeeded, {failed} failed — check API connection"
+        )
     st.rerun()
 
 # ---------------------------------------------------------------------------
@@ -299,7 +367,7 @@ history = st.session_state.history
 if not history:
     st.info(
         "No readings yet. Click **▶ Send one reading** or "
-        "**▶▶ Send 20 readings** to begin.",
+        f"**▶▶ Send {BURST_SIZE} readings** to begin.",
         icon="ℹ️",
     )
     st.stop()
@@ -308,7 +376,6 @@ latest = history[-1]
 latest_score = latest.get("anomaly_score", 0.0)
 latest_severity = latest.get("severity_label", "Normal")
 latest_latency = latest.get("inference_latency_ms", 0.0)
-latest_features = latest.get("top_contributing_features", [])
 latest_deviations = latest.get("feature_deviation_scores", {})
 
 st.markdown("### Latest Reading")
@@ -337,15 +404,18 @@ if "anomaly_score" in history_df.columns:
     chart_df = chart_df.sort_values("timestamp")
     chart_df.index = range(len(chart_df))
 
-    # Add threshold lines using st.line_chart
-    chart_df["Critical threshold"] = 0.75
-    chart_df["Warning threshold"] = 0.5
+    chart_df["Critical threshold"] = CRITICAL_THRESHOLD
+    chart_df["Warning threshold"] = WARNING_THRESHOLD
 
+    # Color order matches column order:
+    #   anomaly_score    → #4fc3f7 (light blue — neutral score line)
+    #   Critical threshold → #ff4444 (red)
+    #   Warning threshold  → #ffaa00 (orange)
     st.line_chart(
         chart_df.set_index("timestamp")[
             ["anomaly_score", "Critical threshold", "Warning threshold"]
         ],
-        color=["#ff4444", "#ffaa00", "#00cc44"],
+        color=["#4fc3f7", "#ff4444", "#ffaa00"],
         height=250,
     )
 
@@ -366,10 +436,12 @@ with col_feat:
                 )
             ]
         )
+        # Reuse _SEVERITY_BG so bar color stays in sync with severity thresholds
+        bar_color = _SEVERITY_BG.get(latest_severity, _SEVERITY_BG["Warning"])
         st.bar_chart(
             feat_df.set_index("Metric"),
             y="Z-score deviation",
-            color="#ff4444" if latest_severity == "Critical" else "#ffaa00",
+            color=bar_color,
             height=250,
         )
     else:
@@ -399,7 +471,7 @@ st.markdown("---")
 st.markdown("### Live Drift vs Training Distribution (Z-score)")
 st.caption(
     "Shows how far the current session's mean readings have drifted from "
-    "the Alibaba training distribution. Values > 2.0 indicate meaningful drift."
+    "the SMD training distribution. Values > 2.0 indicate meaningful drift."
 )
 
 snapshot_dicts = [
@@ -449,7 +521,6 @@ else:
                 )
                 st.success(f"Report saved: `{html_path}`")
 
-                # Display summary table
                 if summary.get("columns"):
                     st.markdown(
                         f"**Dataset drifted:** "
@@ -469,7 +540,6 @@ else:
                     )
                     st.dataframe(col_summary, width="stretch", hide_index=True)
 
-                # Embed the HTML report inline
                 st.markdown("#### Full Evidently Report")
                 with open(html_path, encoding="utf-8") as _f:
                     components.html(_f.read(), height=650, scrolling=True)
