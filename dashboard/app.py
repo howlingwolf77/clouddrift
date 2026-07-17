@@ -145,7 +145,7 @@ MAX_HISTORY = st.sidebar.slider(
 
 st.sidebar.markdown("---")
 st.sidebar.caption(
-    "Model: IF + TCN Ensemble | Test AUC-ROC: 0.899 | Weights: IF=0.40, TCN=0.60"
+    "Track 1: z-score (/detect) | Track 2: IF+TCN ensemble (/batch_detect ≥30 snapshots with same machine_id) | AUC-ROC: 0.899"
 )
 
 
@@ -258,7 +258,7 @@ def _detect(api_url: str, snapshot: dict) -> dict | None:
 st.title("🔍 CloudDrift — Live Anomaly Dashboard")
 st.caption(
     "Real-time cloud infrastructure anomaly detection | "
-    "IF + TCN Ensemble (Test AUC-ROC = 0.899)"
+    "z-score inference | Ensemble AUC-ROC = 0.899 (batch evaluation)"
 )
 
 # ---------------------------------------------------------------------------

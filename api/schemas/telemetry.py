@@ -5,6 +5,7 @@ TelemetrySnapshot  — input for /detect and /batch_detect
 AnomalyResponse    — output from /detect
 BatchDetectRequest — input for /batch_detect
 BatchDetectItem    — one item in the /batch_detect response list
+BatchDetectResponse — full /batch_detect response
 HealthResponse     — output from /health
 ReadinessResponse  — output from /ready
 """
@@ -18,8 +19,9 @@ class TelemetrySnapshot(BaseModel):
     at one point in time.
 
     All metric fields represent percentage utilization [0, 100]
-    or normalized throughput [0, 100] as per the Alibaba Cluster
-    Trace 2018 schema.
+    or normalized throughput [0, 100]. The API accepts values in
+    this human-friendly percentage scale regardless of the [0, 1]
+    scale used internally by the SMD-trained models.
     """
 
     cpu_util: float = Field(
@@ -54,9 +56,11 @@ class TelemetrySnapshot(BaseModel):
         None,
         ge=0.0,
         le=100.0,
-        description="Disk I/O utilization percentage [0, 100]. "
-        "Null is acceptable — sentinel values (-1, 101) from the "
-        "Alibaba trace are excluded here at the client layer.",
+        description=(
+            "Disk I/O utilization percentage [0, 100]. "
+            "Null is acceptable — sentinel values (-1, 101) from the "
+            "Alibaba trace are excluded here at the client layer."
+        ),
         examples=[5.0],
     )
     timestamp: str = Field(
@@ -66,8 +70,13 @@ class TelemetrySnapshot(BaseModel):
     )
     machine_id: str | None = Field(
         None,
-        description="Optional machine identifier for multi-machine batch requests",
-        examples=["m_1932"],
+        description=(
+            "Machine identifier for multi-machine batch requests. "
+            "Required for ensemble scoring in /batch_detect — groups of "
+            "≥ 30 snapshots sharing the same machine_id are scored using "
+            "the full IF + TCN ensemble (AUC-ROC 0.899)."
+        ),
+        examples=["machine-1-1"],
     )
 
     @field_validator("cpu_util", "mem_util", "net_io_in", "net_io_out")
@@ -89,7 +98,7 @@ class TelemetrySnapshot(BaseModel):
                     "net_io_out": 33.08,
                     "disk_io": 5.0,
                     "timestamp": "2026-06-25T14:30:00Z",
-                    "machine_id": "m_1932",
+                    "machine_id": "machine-1-1",
                 }
             ]
         }
@@ -103,11 +112,11 @@ class AnomalyResponse(BaseModel):
     anomaly_score is in [0, 1]:
         < 0.50  → Normal
         0.50-0.75 → Warning
-        >= 0.75 → Critical
+        >= 0.75 → Critical  (3-sigma convention: tanh(3/3) ≈ 0.762)
 
     top_contributing_features lists the metric names that deviated most
-    from their training normal distribution (z-score attribution,
-    Track 1 explainability per CloudDrift design).
+    from their SMD training normal distribution (z-score attribution,
+    Track 1 explainability).
     """
 
     anomaly_score: float = Field(
@@ -119,7 +128,7 @@ class AnomalyResponse(BaseModel):
     )
     severity_label: str = Field(
         ...,
-        description="'Critical', 'Warning', or 'Normal'",
+        description="'Critical' (≥0.75), 'Warning' (0.50-0.75), or 'Normal' (<0.50)",
         examples=["Critical"],
     )
     top_contributing_features: list[str] = Field(
@@ -139,8 +148,12 @@ class AnomalyResponse(BaseModel):
     )
     detection_mode: str = Field(
         default="single_point_zscore",
-        description="'single_point_zscore' for /detect (z-score attribution only). "
-        "Full IF+TCN ensemble requires /batch_detect with >= 30 snapshots.",
+        description=(
+            "'single_point_zscore' for /detect. "
+            "'/batch_detect' uses 'ensemble_if_tcn' when machine_id is provided "
+            "and ≥ 30 sequential snapshots are available, otherwise "
+            "'single_point_zscore'."
+        ),
     )
 
 
@@ -165,6 +178,14 @@ class BatchDetectItem(BaseModel):
     severity_label: str
     top_contributing_features: list[str]
     feature_deviation_scores: dict[str, float]
+    detection_mode: str = Field(
+        default="single_point_zscore",
+        description=(
+            "'ensemble_if_tcn' if this snapshot was scored by the full "
+            "IF + TCN ensemble. 'single_point_zscore' if z-score fallback "
+            "was used (< 30 snapshots or no machine_id in this group)."
+        ),
+    )
 
 
 class BatchDetectResponse(BaseModel):
@@ -174,6 +195,20 @@ class BatchDetectResponse(BaseModel):
     n_flagged: int = Field(..., description="Snapshots above threshold")
     threshold: float = Field(..., description="Anomaly score threshold used")
     results: list[BatchDetectItem]
+    ensemble_scored: int = Field(
+        default=0,
+        description=(
+            "Number of snapshots scored by the full IF + TCN ensemble. "
+            "Requires machine_id and ≥ 30 sequential snapshots per group."
+        ),
+    )
+    zscore_scored: int = Field(
+        default=0,
+        description=(
+            "Number of snapshots scored by z-score fallback "
+            "(< 30 snapshots or no machine_id)."
+        ),
+    )
 
 
 class HealthResponse(BaseModel):

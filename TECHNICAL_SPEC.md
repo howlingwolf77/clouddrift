@@ -209,15 +209,17 @@ No fallback was needed.
 
 ## 7. Explainability Strategy
 
-**Two-track approach:**
+**Three-track approach:**
 
-| Track | Location | Method | Purpose |
+| Track | Location | Method | Latency |
 |-------|----------|--------|---------|
-| Lightweight | Production API (/detect) | Z-score deviation ranking | Fast attribution (< 5ms) |
-| Full SHAP | Notebook 06 | SHAP TreeExplainer | Portfolio demonstration |
+| Lightweight (Track 1) | /detect + /batch_detect fallback | Z-score deviation | < 10ms |
+| Ensemble (Track 2) | /batch_detect ≥30 snapshots with same machine_id | IF+TCN ensemble | 3–8s |
+| Full SHAP | Notebook 06 | SHAP TreeExplainer | Seconds per row |
 
-SHAP is intentionally excluded from the API inference path to meet the p95 ≤ 200ms
-latency target.
+SHAP is excluded from the API inference path. The ensemble path in
+/batch_detect accepts the 3–8 second latency because batch callers
+are explicitly trading speed for accuracy by providing sequential context.
 
 ---
 

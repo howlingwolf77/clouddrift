@@ -138,15 +138,21 @@ machine-1-1 through machine-1-7 (group 1, cluster A).
 and 3 or on production environments with different server workload
 profiles. Periodic retraining on representative machines is recommended.
 
-### 2. Single-Point Detection Mode
+### 2. Detection Mode Depends on Endpoint and Snapshot Count
 
-The `/detect` API endpoint uses z-score attribution (Track 1) rather
-than the full IF+TCN ensemble. The TCN requires 30 sequential
-timesteps for its sliding window context, not available from a single
-telemetry snapshot.
+`/detect` always uses z-score attribution (Track 1) — single stateless
+request, no rolling window context, < 10ms latency.
 
-**Implication:** For maximum detection capability, use `/batch_detect`
-with at least 30 sequential snapshots from the same machine.
+`/batch_detect` uses the full IF + TCN ensemble (Track 2) when a group
+of ≥ 30 sequential snapshots shares the same `machine_id`. Groups with
+fewer than 30 snapshots or no `machine_id` fall back to z-score.
+
+**TCN warm-up:** with exactly 30 snapshots only the last row has a full
+TCN reconstruction error (the first 29 rows cannot complete a seq_length=30
+window and are IF-dominant). 60+ snapshots give most rows a full TCN score.
+
+**Implication:** For the highest-quality ensemble score, send 60+
+sequential readings from the same machine via `/batch_detect`.
 
 ### 3. Precision Below Target on Validation
 

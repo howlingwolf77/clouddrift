@@ -166,6 +166,32 @@ curl -s -X POST http://localhost:8000/detect \
 **Purpose:** Score a list of telemetry snapshots and return results
 ranked by anomaly score descending.
 
+**Routing logic (per machine_id group):**
+
+| Condition | Detection mode | AUC-ROC |
+|---|---|---|
+| `machine_id` present AND ≥ 30 snapshots in group | `ensemble_if_tcn` | 0.899 |
+| < 30 snapshots OR no `machine_id` | `single_point_zscore` | — |
+
+Mixed batches with multiple machine IDs, or machines with different
+group sizes, are fully supported — each group is routed independently.
+
+**TCN warm-up:** the TCN Autoencoder uses a sliding window of
+`seq_length=30`. With exactly 30 snapshots, only the last row has a
+full reconstruction error. Rows 1–29 receive `NaN` errors filled with
+`0.0`, making them IF-dominant (IF=0.40 / TCN≈0.0 effectively).
+With 60+ snapshots, most rows receive proper TCN scores at the full
+IF=0.40 / TCN=0.60 weighting. For best results, send 60+ snapshots.
+
+**Response fields unique to `/batch_detect`:**
+- `detection_mode` per result item: `"ensemble_if_tcn"` or `"single_point_zscore"`
+- `ensemble_scored`: count of snapshots scored by IF+TCN ensemble
+- `zscore_scored`: count of snapshots scored by z-score fallback
+
+**Ensemble inference latency:** 3–8 seconds for 30–60 snapshots
+(feature engineering + TCN inference on CPU). Not suitable for
+sub-second latency requirements — use `/detect` in those cases.
+
 ```bash
 curl -s -X POST http://localhost:8000/batch_detect \
   -H "Content-Type: application/json" \
@@ -190,7 +216,7 @@ curl -s -X POST http://localhost:8000/batch_detect \
 {
     "n_snapshots": 2,
     "n_flagged": 1,
-    "threshold": 0.591347,
+    "threshold": 0.566996,
     "results": [
         {
             "rank": 1,
@@ -209,7 +235,8 @@ curl -s -X POST http://localhost:8000/batch_detect \
                 "cpu_util": 3.4005,
                 "net_io_out": 3.3452,
                 "mem_util": 0.9904
-            }
+            },
+            "detection_mode": "single_point_zscore"
         },
         {
             "rank": 2,
@@ -228,9 +255,12 @@ curl -s -X POST http://localhost:8000/batch_detect \
                 "cpu_util": 0.7876,
                 "net_io_out": 0.7843,
                 "mem_util": 0.5616
-            }
+            },
+            "detection_mode": "single_point_zscore"
         }
-    ]
+    ],
+    "ensemble_scored": 0,
+    "zscore_scored": 2
 }
 ```
 

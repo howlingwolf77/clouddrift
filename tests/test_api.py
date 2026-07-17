@@ -225,7 +225,7 @@ class TestScoreSnapshot:
                 "timestamp": "t2",
             },
         ]
-        ranked, _ = score_batch(snapshots, ref, {})
+        ranked, *_ = score_batch(snapshots, ref, {})
         scores = [r["anomaly_score"] for r in ranked]
         assert scores == sorted(scores, reverse=True)
 
@@ -247,7 +247,7 @@ class TestScoreSnapshot:
                 "timestamp": "t2",
             },
         ]
-        ranked, _ = score_batch(snapshots, ref, {})
+        ranked, *_ = score_batch(snapshots, ref, {})
         ranks = [r["rank"] for r in ranked]
         assert ranks == [1, 2]
 

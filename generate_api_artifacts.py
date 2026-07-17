@@ -55,6 +55,8 @@ ENSEMBLE_CONFIG = {
     "test_f1": 0.650,
     "test_f2": 0.713,
     "val_auc_roc": 0.868,
+    "if_bounds": {"lower": 0.3776, "upper": 0.6589},
+    "tcn_bounds": {"lower": 0.000549, "upper": 0.005620},
     "val_metrics": {
         "auc_roc": 0.868,
         "precision": 0.284,

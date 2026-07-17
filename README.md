@@ -273,17 +273,21 @@ lightweight heuristic is trustworthy for production use.
 
 ## Limitations
 
-- **Single-point detection mode:** `/detect` uses z-score attribution,
-  not the full IF+TCN ensemble. The ensemble requires rolling window
-  context (≥30 timesteps) not available from a single snapshot.
-- **Retraining:** Models were trained on 7 SMD machines. Performance
-  may vary on machines with different baseline utilization patterns.
-  CloudDrift's Evidently AI integration detects distribution drift
-  to signal when retraining is warranted.
-- **Precision targets:** At 6–9.5% anomaly rate, binary precision/recall
-  targets (≥0.70/≥0.65) are achievable on test (P=0.567, R=0.762)
-  but not val (P=0.284, R=0.426). AUC-ROC remains the primary
-  threshold-independent metric.
+- **`/detect` — z-score only:** The single-snapshot endpoint uses z-score
+  attribution, not the IF+TCN ensemble. The TCN requires 30 consecutive
+  timesteps and the IF requires 68 engineered rolling features — neither
+  is computable from a single stateless request.
+- **`/batch_detect` — ensemble requires ≥30 snapshots with `machine_id`:**
+  Groups with fewer than 30 snapshots or no `machine_id` fall back to
+  z-score per snapshot. With exactly 30 snapshots, rows 1–29 are
+  IF-dominant (TCN warm-up); 60+ snapshots give most rows full TCN scores.
+- **Retraining:** Models were trained on 7 SMD machines. Performance may
+  vary on machines with different baseline utilization patterns.
+  CloudDrift's Evidently AI integration detects distribution drift to
+  signal when retraining is warranted.
+- **Precision targets:** At 6–9.5% anomaly rate, binary recall(0.762 test) 
+  is above the ≥0.65 target with precision (0.567 test) is below the ≥0.70 
+  target. AUC-ROC (0.899) is the primary threshold-independent metric.
 
 ---
 
