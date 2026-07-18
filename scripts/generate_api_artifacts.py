@@ -18,6 +18,15 @@ Run from the project root after Days 4, 5, and 6 are complete:
     python generate_api_artifacts.py
 """
 
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path when running from scripts/
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+
 import json
 import logging
 from pathlib import Path

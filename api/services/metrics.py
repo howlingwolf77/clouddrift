@@ -16,7 +16,7 @@ Four metrics following the RED observability pattern
     clouddrift_prediction_latency_seconds
         Histogram — end-to-end request latency in seconds for /detect
         and /batch_detect. Bucket boundaries chosen around the ≤200ms
-        p95 SLA target from the project spec.
+        p95 SLA target for /detect from the project spec.
 
     clouddrift_schema_violations_total
         Counter — Pandera validation failures in /detect. A sustained

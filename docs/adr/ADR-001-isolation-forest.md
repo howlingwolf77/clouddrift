@@ -84,3 +84,24 @@ Threshold calibrated at the 90th percentile of validation IF scores
   high recall but low precision is expected at 10% contamination rate
 - IF contributes 40% weight to ensemble (per original design specification)
 - Test recall 0.733 clears the ≥0.65 operational target
+
+## Amendment — Live Serving via /batch_detect (July 2026)
+
+This ADR was originally written with the IF's role framed as training
+and batch evaluation only. Following the implementation of ensemble
+inference in `/batch_detect` (see `api/services/detection.py`), the
+IF now runs in live production serving:
+
+- `/batch_detect` with a `machine_id` group of ≥ 30 sequential snapshots
+  triggers the full IF + TCN ensemble pipeline at request time
+- The IF scores are computed by `compute_anomaly_scores()` on the
+  normalized 68-feature matrix built from the incoming snapshots
+- IF contributes 40% (IF_WEIGHT=0.40) to the ensemble score per the
+  original design specification
+- Ensemble failure (any exception in the pipeline) falls back to
+  z-score silently to preserve API availability
+
+This means the ADR decision — choose Isolation Forest as the anomaly
+detection baseline — now has a direct production consequence, not just
+an evaluation one. The IF artifact (`artifacts/isolation_forest.joblib`)
+is loaded at API startup and called on qualifying `/batch_detect` requests.

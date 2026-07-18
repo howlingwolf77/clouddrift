@@ -44,7 +44,7 @@ rate(clouddrift_schema_violations_total[5m])
 
 | Metric | Warning | Critical | Action |
 |--------|---------|----------|--------|
-| p95 latency | > 200ms | > 500ms | Profile detection service |
+| p95 latency (`/detect` endpoint) | > 200ms | > 500ms | Profile detection service |
 | Schema violations | > 5/min | > 20/min | Investigate input source |
 | Critical anomalies | > 10/min | > 50/min | Check infrastructure |
 
@@ -154,9 +154,10 @@ Or open it interactively in VS Code and run cells manually.
    per top ensemble-flagged anomaly window. Shows exactly which features
    pushed the IF score toward anomalous.
 
-3. **Track 1 vs Track 2 comparison**: Verifies z-score attribution
-   (production API) substantially agrees with SHAP (mathematically exact)
-   on the same anomaly row — validating Track 1 is trustworthy.
+3. **Track 1 vs Track 3 comparison**: Verifies z-score attribution
+   (production API) identifies the same root metric family as SHAP (mathematically exact) —
+   metric-level consistency, not feature-level exact agreement
+   on the same anomaly row — validating Track 1 is trustworthy for production use.
 
 ---
 

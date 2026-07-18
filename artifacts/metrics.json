@@ -1,7 +1,5 @@
 {
   "isolation_forest": {
-    "threshold_strategy": "percentile",
-    "threshold_rationale": "Calibrated at 90th percentile of validation IF scores (0.591347). Flags top 10% of readings. Precision-recall targets are not achievable at 6% val anomaly rate; AUC-ROC is the primary metric.",
     "validation": {
       "auc_roc": 0.801,
       "precision": 0.194,
@@ -25,7 +23,9 @@
         "stability_check_pass": true,
         "note": "Folds 1-3 contain no anomalies (SMD train period). Folds 4-5 reach anomaly-containing test period."
       }
-    }
+    },
+    "threshold_strategy": "percentile",
+    "threshold_rationale": "Calibrated at 90th percentile of validation IF scores (0.591347). Flags top 10% of readings. Precision-recall targets are not achievable at 6% val anomaly rate; AUC-ROC is the primary metric."
   },
   "tcn_autoencoder": {
     "validation": {

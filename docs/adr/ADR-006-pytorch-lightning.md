@@ -2,7 +2,7 @@
 
 **Date:** June 2026
 **Status:** Accepted
-**Author:** Rainel (Ryan) Lobora
+**Author:** Rainel (Ryan) Lobo
 
 ## Context
 

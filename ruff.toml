@@ -30,10 +30,10 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [lint.per-file-ignores]
-"day4_if_training_smd.py" = ["E402"]
-"day5_tcn_training_smd.py" = ["E402"]
-"day5_tcn_recovery.py" = ["E402"]
-"day6_ensemble_smd.py" = ["E402"]
-"day6b_weight_sweep.py" = ["E402"]
-"day6c_metrics_sweep.py" = ["E402"]
-"generate_api_artifacts.py" = ["E402"]
+"scripts/day4_if_training_smd.py" = ["E402"]
+"scripts/day5_tcn_training_smd.py" = ["E402"]
+"scripts/day5_tcn_recovery.py" = ["E402"]
+"scripts/day6_ensemble_smd.py" = ["E402"]
+"scripts/day6b_weight_sweep.py" = ["E402"]
+"scripts/day6c_metrics_sweep.py" = ["E402"]
+"scripts/generate_api_artifacts.py" = ["E402"]

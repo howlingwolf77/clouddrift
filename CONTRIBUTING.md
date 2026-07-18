@@ -62,14 +62,17 @@ Always commit the updated `uv.lock` alongside `pyproject.toml`.
 
 ## Retraining Models
 
-The training pipeline lives in standalone scripts at the project root:
+The training pipeline lives in `scripts/` at the project root:
 
 ```bash
-python day4_if_training_smd.py    # Isolation Forest
-python day5_tcn_training_smd.py   # TCN Autoencoder (~1.5h on CPU)
-python day6_ensemble_smd.py       # Ensemble scoring
-python generate_api_artifacts.py  # API artifacts and reference stats
+python scripts/day4_if_training_smd.py    # Isolation Forest (~2 min)
+python scripts/day5_tcn_training_smd.py   # TCN Autoencoder (~1.5h on CPU)
+python scripts/day6_ensemble_smd.py       # Ensemble scoring and weights
+python scripts/generate_api_artifacts.py  # API artifacts and reference stats
 ```
+
+All scripts must be run from the **project root**, not from inside `scripts/`.
+The `src` package imports depend on the working directory being the project root.
 
 After retraining, regenerate `artifacts/metrics.json` with updated
 values before committing artifacts. See `docs/DEPLOYMENT_GUIDE.md`

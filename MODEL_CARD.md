@@ -188,20 +188,16 @@ used together, not as substitutes.
 
 ## Explainability
 
-Two-track design ensures both speed and rigor:
+Three-track design balancing speed, accuracy, and rigor:
 
-**Track 1 (production):** Z-score deviation ranking. For each
-incoming telemetry snapshot, computes |value − training_mean| /
-training_std per metric and returns the top N metrics ranked by
-deviation. Runs in microseconds. Available in every `/detect`
-response via `top_contributing_features` and `feature_deviation_scores`.
+| Track | Location | Method | Purpose |
+|-------|----------|--------|---------|
+| 1 | `/detect` + fallback | Z-score deviation per metric | Fast attribution < 10ms, always available |
+| 2 | `/batch_detect` ≥ 30 snapshots | IF + TCN ensemble | Full model inference, AUC-ROC 0.899 |
+| 3 | Notebook 06 | SHAP TreeExplainer | Mathematically exact Shapley attribution |
 
-**Track 2 (evaluation):** SHAP TreeExplainer on the Isolation Forest.
-`notebooks/06_shap_analysis.ipynb` produces waterfall charts for the
-top 5 ensemble-flagged anomaly windows, providing mathematically exact
-Shapley value decomposition. The Track 1 vs Track 2 comparison cell
-validates that the two methods substantially agree, confirming Track 1
-is trustworthy for production use.
+Track 1 is always present in every API response regardless of detection mode.
+Track 2 and Track 3 both validate that Track 1's lightweight heuristic is trustworthy.
 
 ---
 

@@ -1,8 +1,8 @@
 # ADR-003: FastAPI for Model Serving
 
 **Date:** June 2026
-**Status:** Accepted
-**Author:** Rainel (Ryan) Lobora
+**Status:** Accepted (amended July 2026 — detection serving architecture updated)
+**Author:** Rainel (Ryan) Lobo
 
 ## Context
 
@@ -38,14 +38,25 @@ successfully. Container orchestration (Docker Compose `depends_on:
 condition: service_healthy`) prevents traffic from reaching the
 dashboard before the API is ready to serve.
 
-## Single-Point Detection Mode
+## Two-Track Detection Serving
 
-The `/detect` endpoint uses z-score attribution (Track 1) rather than
-the full IF+TCN ensemble. The IF was trained on 13 NAB rolling features;
-the TCN requires 30-timestep sequences. Neither can be applied directly
-to a single raw Alibaba-style telemetry snapshot. z-score attribution
-against the training distribution is the correct single-point signal.
-Full ensemble is available via `/batch_detect` with sufficient context.
+Two detection paths are served by the API:
+
+**Track 1 — Z-score attribution (\`/detect\` and \`/batch_detect\` fallback):**
+Single-point stateless scoring. Computes |value − training_mean| / training_std
+per metric against the SMD training distribution. No feature engineering
+or model inference required. Latency < 10ms.
+
+**Track 2 — IF + TCN Ensemble (`/batch_detect` with ≥ 30 snapshots):**
+When a `machine_id` group provides ≥ 30 sequential snapshots,
+`_score_group_ensemble()` in `api/services/detection.py` builds the
+68-feature matrix using `build_alibaba_features()`, applies the fitted
+normalization pipeline, computes IF anomaly scores (IF trained on 68 SMD
+features) and TCN reconstruction errors (seq_length=30), and combines at
+IF=0.40 / TCN=0.60. AUC-ROC validated at 0.899 on the SMD test set.
+Latency 3–8 seconds. Ensemble failures fall back to z-score silently.
+
+The `detection_mode` field in every result confirms which path ran.
 
 ## Consequences
 

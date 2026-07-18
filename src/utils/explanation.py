@@ -1,15 +1,17 @@
 """
 Lightweight z-score attribution for CloudDrift anomaly explanations.
 
-Two-track explainability strategy (from CloudDrift technical spec):
+Three-track explainability strategy (from CloudDrift technical spec):
 
-    Track 1 (this module) — Production API:
+    Track 1 (this module) — Z-score attribution, all /detect responses:
         For each detected anomaly, compute how many standard deviations
         each feature is from its training normal mean. Return the top N
         features with the highest deviation scores. Fast: microseconds,
         no additional model inference.
 
-    Track 2 (notebooks/06_shap_analysis.ipynb) — Evaluation:
+    Track 2 — IF + TCN Ensemble, /batch_detect with >=30 snapshots (api/services/detection.py)
+
+    Track 3 (notebooks/06_shap_analysis.ipynb) — SHAP TreeExplainer:
         Full SHAP TreeExplainer on Isolation Forest with waterfall charts
         for the top anomaly windows. Implemented on Day 7.
 

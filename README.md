@@ -255,19 +255,27 @@ telemetry used for feature engineering validation and API schema design.
 
 ## Explainability
 
-CloudDrift uses a two-track explainability design:
+CloudDrift uses a three-track explainability design:
 
-**Track 1 — Production API (z-score attribution)**
+**Track 1 — Z-score attribution (all /detect requests):**
 Every `/detect` response includes `top_contributing_features` and
-`feature_deviation_scores`: the metrics that deviated most from their
+`feature_deviation_scores` — the metrics that deviated most from their
 SMD training normal distribution, computed in microseconds with no
-additional model inference. See `api/services/detection.py`.
+additional model inference.
 
-**Track 2 — Evaluation notebook (SHAP)**
+**Track 2 — IF + TCN Ensemble (/batch_detect with ≥ 30 snapshots):**
+When `/batch_detect` receives ≥ 30 sequential snapshots from the same
+`machine_id`, the full Isolation Forest + TCN Autoencoder ensemble runs.
+Feature engineering builds 68 rolling and cross-metric features; IF
+anomaly scores and TCN reconstruction errors are combined at
+IF=0.40 / TCN=0.60. The `detection_mode` field in each result confirms
+which track ran. AUC-ROC validated at **0.899** on the SMD test set.
+
+**Track 3 — SHAP TreeExplainer (evaluation notebook):**
 `notebooks/06_shap_analysis.ipynb` runs `shap.TreeExplainer` on the
 Isolation Forest and produces waterfall charts for the top 5
-ensemble-flagged anomaly windows. This validates that Track 1's
-lightweight heuristic is trustworthy for production use.
+ensemble-flagged anomaly windows. The Track 1 vs Track 3 comparison
+cell validates that z-score attribution is trustworthy for production use.
 
 ---
 

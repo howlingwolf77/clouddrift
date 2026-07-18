@@ -84,3 +84,20 @@ The TCN passed the separation check on SMD:
 - 100-epoch training wall time: approximately 1.5 hours on CPU (WSL2)
 - Recommendation for future runs: set min_delta=0.0001 in EarlyStopping
   to enable early stopping when improvement falls below meaningful threshold
+
+## Amendment — Live Serving via /batch_detect (July 2026)
+
+The TCN Autoencoder now runs in live production serving, not only in
+training evaluation. When `/batch_detect` receives a `machine_id` group
+of ≥ 30 sequential snapshots, `_score_group_ensemble()` in
+`api/services/detection.py` calls `compute_reconstruction_errors()` on
+the normalized 68-feature matrix built from the incoming batch.
+
+TCN warm-up behavior at the serving layer: with exactly 30 snapshots,
+only the last row receives a full reconstruction error (the first 29
+rows cannot complete the seq_length=30 sliding window). Those rows
+receive `NaN` filled with `0.0`, making them IF-dominant at IF=0.40
+rather than the intended IF=0.40 / TCN=0.60 split. Sending 60+
+snapshots gives most rows a proper TCN reconstruction score.
+The `detection_mode` field in each result indicates which scoring
+path ran: `"ensemble_if_tcn"` or `"single_point_zscore"`.
