@@ -250,3 +250,4 @@ mlruns/
 logs/drift/*.html
 logs/drift/*.json
 artifacts/checkpoints/
+logs/
